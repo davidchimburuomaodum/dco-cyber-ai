@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DCO CYBER AI | Security Intelligence Centre</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;
+ background:#212121;
+ color:#ececec;
+ font-family:Arial,sans-serif;
+ padding:24px;
+}
+.container{max-width:1100px;margin:auto}
+header{text-align:center;margin:35px auto 40px}
+header h1{color:#ececec;font-size:30px;font-weight:600}
+header p{color:#a3a3a3;line-height:1.6}
+header a{color:#b5b5b5;text-decoration:none}
+header a:hover{color:#fff}
+.grid{
+ display:grid;
+ grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+ gap:18px
+}
+.card{
+ background:#2f2f2f;
+ border:1px solid #424242;
+ border-radius:16px;
+ padding:23px;
+ transition:border-color .2s,background .2s
+}
+.card:hover{border-color:#666;background:#333}
+.card h2{color:#f1f1f1;font-size:19px}
+.card p{color:#b4b4b4;line-height:1.6;min-height:48px}
+textarea{
+ width:100%;
+ min-height:150px;
+ background:#212121;
+ color:#f5f5f5;
+ border:1px solid #555;
+ border-radius:12px;
+ padding:14px;
+ resize:vertical;
+ font:14px Arial,sans-serif;
+ outline:none
+}
+textarea:focus{border-color:#888}
+textarea::placeholder{color:#888}
+button{
+ width:100%;
+ margin-top:13px;
+ padding:13px;
+ background:#ececec;
+ color:#202020;
+ border:0;
+ border-radius:10px;
+ font-weight:600;
+ font-size:14px;
+ cursor:pointer
+}
+button:hover{background:#d4d4d4}
+button:disabled{opacity:.5;cursor:wait}
+.result{
+ white-space:pre-wrap;
+ overflow-wrap:anywhere;
+ background:#212121;
+ border:1px solid #484848;
+ border-radius:10px;
+ padding:15px;
+ margin-top:15px;
+ display:none;
+ line-height:1.7;
+ font-size:14px;
+ color:#e5e5e5
+}
+.status{color:#a3a3a3;font-size:13px;margin-top:10px}
+footer{text-align:center;color:#888;margin:40px 0}
+@media(max-width:600px){
+ body{padding:15px}
+ header h1{font-size:25px}
+ .card{padding:18px}
+}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>DCO CYBER AI</h1>
+<p>SECURITY INTELLIGENCE CENTRE</p>
+<p>Defensive cybersecurity analysis by DCO Cyber Solutions</p>
+<a href="/">← Back to AI Assistant</a>
+</header>
+
+<div class="grid">
+
+<section class="card">
+<h2>01 · Threat Intelligence</h2>
+<p>Analyse submitted threat reports, indicators and suspicious security observations.</p>
+<textarea id="threatInput" placeholder="Paste a threat report or security indicators here. Do not include passwords or private keys."></textarea>
+<button onclick="analyse('threat')">Analyse Threat</button>
+<div id="threatStatus" class="status"></div>
+<div id="threatResult" class="result"></div>
+</section>
+
+<section class="card">
+<h2>02 · Digital Forensics</h2>
+<p>Organise forensic notes, observations, case details and evidence timelines.</p>
+<textarea id="forensicsInput" placeholder="Enter your authorised investigation notes or observations. Do not include personal secrets."></textarea>
+<button onclick="analyse('forensics')">Analyse Case Notes</button>
+<div id="forensicsStatus" class="status"></div>
+<div id="forensicsResult" class="result"></div>
+</section>
+
+<section class="card">
+<h2>03 · Security Report Generator</h2>
+<p>Turn your security assessment notes into a structured professional report.</p>
+<textarea id="reportInput" placeholder="Enter assessment scope, findings, observations and recommendations."></textarea>
+<button onclick="analyse('report')">Generate Report</button>
+<div id="reportStatus" class="status"></div>
+<div id="reportResult" class="result"></div>
+</section>
+
+</div>
+
+<footer>DCO CYBER SOLUTIONS · DCO CYBER AI</footer>
+</div>
+
+<script>
+const modules = {
+  threat: {
+    input: "threatInput",
+    status: "threatStatus",
+    result: "threatResult",
+    endpoint: "/api/threat-analysis"
+  },
+  forensics: {
+    input: "forensicsInput",
+    status: "forensicsStatus",
+    result: "forensicsResult",
+    endpoint: "/api/forensics-analysis"
+  },
+  report: {
+    input: "reportInput",
+    status: "reportStatus",
+    result: "reportResult",
+    endpoint: "/api/report-generator"
+  }
+};
+
+async function analyse(type) {
+  const item = modules[type];
+  const content = document.getElementById(item.input).value.trim();
+  const status = document.getElementById(item.status);
+  const result = document.getElementById(item.result);
+  const button = status.previousElementSibling;
+
+  if (!content) {
+    status.textContent = "Please enter information first.";
+    return;
+  }
+
+  if (content.length > 12000) {
+    status.textContent = "Maximum input length is 12,000 characters.";
+    return;
+  }
+
+  button.disabled = true;
+  status.textContent = "Analysing...";
+  result.style.display = "none";
+  result.textContent = "";
+
+  try {
+    const response = await fetch(item.endpoint, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({content})
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Analysis failed.");
+    }
+
+    result.textContent = data.analysis || data.report || "No result returned.";
+    result.style.display = "block";
+    status.textContent = "Analysis complete.";
+  } catch (error) {
+    status.textContent = "Error: " + error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

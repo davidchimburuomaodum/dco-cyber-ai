@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DCO CYBER AI | Phishing Intelligence</title>
+<style>
+*{box-sizing:border-box}
+body{
+margin:0;min-height:100vh;color:#e9fff0;
+font-family:Arial,sans-serif;
+background:radial-gradient(ellipse at 15% 15%,rgba(0,255,140,.13),transparent 38%),radial-gradient(ellipse at 85% 70%,rgba(0,180,255,.09),transparent 38%),#050a09
+}
+header{padding:22px;border-bottom:1px solid #20392a}
+h1{color:#40ed91;letter-spacing:2px}
+main{max-width:900px;margin:35px auto;padding:18px}
+.panel{background:linear-gradient(145deg,#11231a,#07110d);border:1px solid #28543a;border-radius:16px;padding:24px;box-shadow:0 0 35px #00ff8210}
+textarea{width:100%;min-height:190px;background:#080e0b;color:white;border:1px solid #31523d;padding:15px;border-radius:8px;resize:vertical;font:15px Arial}
+button{background:#35df83;color:#07120b;border:0;padding:14px 22px;border-radius:7px;font-weight:bold;margin-top:14px;cursor:pointer}
+button:disabled{opacity:.5}
+#result{white-space:pre-wrap;line-height:1.7;margin-top:22px;background:#080e0b;border:1px solid #244332;border-radius:10px;padding:18px;display:none}
+small,.muted{color:#91a99a}
+a{color:#40ed91;text-decoration:none}
+.notice{font-size:13px;color:#b4c8ba;line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+<h1>DCO CYBER AI</h1>
+<small>PHISHING INTELLIGENCE ANALYZER / 001</small>
+</header>
+<main>
+<div class="panel">
+<p><a href="/">← Back to AI Assistant</a></p>
+<h2>Phishing Intelligence Analyzer</h2>
+<p class="muted">Analyze suspicious emails, messages and URL text with AI-assisted security assessment.</p>
+
+<label for="content"><strong>Suspicious content</strong></label>
+<textarea id="content" maxlength="12000" placeholder="Paste a suspicious email, message or URL here..."></textarea>
+
+<p class="notice">Safety: Do not click suspicious links. This tool analyzes the text you submit; it does not visit websites or independently verify their safety. Remove passwords, private information and personal details before submitting.</p>
+
+<button id="analyze">ANALYZE CONTENT ↗</button>
+<div id="result" aria-live="polite"></div>
+</div>
+</main>
+<script>
+const button=document.getElementById("analyze");
+const result=document.getElementById("result");
+button.onclick=async()=>{
+ const content=document.getElementById("content").value.trim();
+ if(!content){result.style.display="block";result.textContent="Please paste a message or URL to analyze.";return;}
+ result.style.display="block";
+ result.textContent="DCO CYBER AI is analyzing the submitted content...";
+ button.disabled=true;
+ try{
+  const response=await fetch("/api/phishing-analysis",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({content})
+  });
+  const data=await response.json();
+  result.textContent=data.analysis || data.error || "No result received.";
+  if(data.details) result.textContent += "\n\nDetails: "+data.details;
+ }catch(error){
+  result.textContent="Connection error. Check that the DCO CYBER AI server is running.";
+ }finally{
+  button.disabled=false;
+ }
+};
+</script>
+</body>
+</html>

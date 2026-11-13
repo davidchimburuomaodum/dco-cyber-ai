@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#212121">
+<title>DCO CYBER AI</title>
+<style>
+:root{--bg:#212121;--panel:#171717;--card:#2b2b2b;--border:#393939;--text:#ececec;--muted:#a1a1a1;--accent:#39d98a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,sans-serif}
+button,textarea{font:inherit}
+button{cursor:pointer}
+.app{display:flex;min-height:100vh}
+.sidebar{width:260px;background:var(--panel);padding:18px 13px;display:flex;flex-direction:column;flex-shrink:0;transition:transform .25s}
+.brand{display:flex;align-items:center;gap:10px;padding:8px 9px 22px;font-weight:bold;letter-spacing:.5px}
+.logo{width:35px;height:35px;border-radius:11px;background:#193d2c;color:var(--accent);display:grid;place-items:center;font-size:19px}
+.newchat,.navlink{width:100%;padding:12px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--text);text-align:left;text-decoration:none;display:flex;align-items:center;gap:11px;font-size:14px}
+.newchat{border-color:#414141;margin-bottom:22px}
+.navlink:hover,.newchat:hover{background:#292929}
+.navtitle{color:#888;font-size:11px;padding:13px 10px 8px;letter-spacing:1px}
+.sidebar-bottom{margin-top:auto;border-top:1px solid var(--border);padding-top:14px}
+.profile{padding:12px 9px;color:#aaa;font-size:12px}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;min-height:100vh}
+.topbar{height:62px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 22px}
+.top-left{display:flex;align-items:center;gap:13px}
+.menu{background:none;border:0;color:white;font-size:21px}
+.topbar small{color:var(--muted)}
+.top-right{display:flex;align-items:center;gap:12px}
+.mode-select{
+ background:#303030;color:#eee;border:1px solid #505050;
+ border-radius:9px;padding:9px 11px;font-size:12px;
+ max-width:190px;outline:none
+}
+.mode-select:focus{border-color:var(--accent)}
+.model-select{
+ background:#303030;color:#eee;border:1px solid #505050;
+ border-radius:9px;padding:9px 11px;font-size:12px;
+ max-width:190px;outline:none
+}
+.model-select:focus{border-color:var(--accent)}
+
+@media(max-width:500px){
+ .top-right{gap:6px}
+ .mode-select{max-width:145px;padding:8px 6px}
+ .model-select{max-width:125px;padding:8px 6px}
+ .status{display:none}
+}
+
+.status{color:var(--accent);font-size:12px}
+.content{width:100%;max-width:850px;margin:0 auto;padding:28px 22px;flex:1;display:flex;flex-direction:column}
+.welcome{text-align:center;margin:auto auto 30px;padding:30px 0}
+.welcome .symbol{font-size:38px;color:var(--accent)}
+.welcome h1{font-size:clamp(24px,4vw,34px);margin:13px 0}
+.welcome p{color:var(--muted);line-height:1.6}
+.suggestions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:22px}
+.suggestion{background:#292929;border:1px solid var(--border);border-radius:12px;padding:15px;text-align:left;color:var(--text)}
+.suggestion:hover{border-color:#777;background:#303030}
+.suggestion strong{display:block;margin-bottom:7px;font-size:14px}
+.suggestion span{color:var(--muted);font-size:12px;line-height:1.5}
+.messages{display:flex;flex-direction:column;gap:22px;margin-bottom:24px}
+.message{max-width:88%;padding:14px 17px;border-radius:16px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
+.user{align-self:flex-end;background:#303030}
+.assistant{align-self:flex-start;background:transparent;border:1px solid #383838;width:100%}
+.message-actions{display:flex;gap:12px;margin-top:10px}
+.message-actions button{background:none;border:0;color:#aaa;font-size:12px;padding:3px}
+.composer{position:sticky;bottom:0;background:var(--bg);padding:12px 0 8px}
+.inputbox{background:#2f2f2f;border:1px solid #505050;border-radius:18px;padding:12px 13px;box-shadow:0 5px 25px #0003}
+textarea{width:100%;min-height:55px;max-height:180px;resize:vertical;border:0;outline:0;background:transparent;color:white;padding:7px;font-size:15px}
+textarea::placeholder{color:#999}
+.controls{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.control-group{display:flex;align-items:center;gap:7px}
+.toolbtn{border:0;border-radius:50%;background:#414141;color:#eee;width:34px;height:34px;padding:0;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
+.toolbtn:hover{background:#555}
+.upload-wrap{position:relative}
+.plusbtn{width:36px;height:36px;border:0;border-radius:50%;background:#414141;color:white;font-size:23px;line-height:1;cursor:pointer}
+.upload-menu{display:none;position:absolute;bottom:44px;left:0;background:#252525;border:1px solid #555;border-radius:12px;padding:7px;min-width:180px;z-index:10;box-shadow:0 8px 25px #0008}
+.upload-menu.open{display:block}
+.upload-option{display:block;width:100%;padding:11px;border:0;border-radius:8px;background:transparent;color:white;text-align:left;cursor:pointer}
+.upload-option:hover{background:#414141}
+#fileInput{display:none}
+#mic{font-size:0}
+#mic::before{content:"🎙";font-size:15px}
+.control-group{display:flex;gap:8px}
+.toolbtn{border:0;border-radius:10px;background:#414141;color:#eee;padding:9px 12px}
+.toolbtn:hover{background:#555}
+.send{background:var(--accent);color:#082015;font-weight:bold;border:0;border-radius:11px;padding:10px 17px}
+.send:disabled{opacity:.5}
+.hint{text-align:center;color:#888;font-size:11px;margin:10px 0}
+.mobile-backdrop{display:none}
+@media(max-width:700px){
+ .app{min-width:760px}
+ .sidebar{position:relative;top:auto;bottom:auto;left:auto;transform:none;box-shadow:none}
+ .sidebar.open{transform:none}
+ .mobile-backdrop{display:none!important}
+ .content{padding:20px 14px}
+ .topbar{padding:0 14px}
+ .suggestions{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .message{max-width:96%}
+}
+
+.chat-history{display:flex;flex-direction:column;gap:5px;max-height:42vh;overflow-y:auto;margin-top:8px}
+.history-item{display:flex;align-items:center;gap:5px;border-radius:9px;padding:8px;color:#ddd;font-size:13px}
+.history-item:hover,.history-item.active{background:#303030}
+.history-open{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:none;border:0;color:inherit;text-align:left;cursor:pointer}
+.history-delete{background:none;border:0;color:#999;padding:5px;cursor:pointer}
+.history-delete:hover{color:#ff7777}
+.history-empty{padding:8px;color:#888;font-size:12px}
+
+
+.history-search{
+ width:100%;
+ margin:8px 0;
+ padding:9px 11px;
+ border:1px solid #383838;
+ border-radius:8px;
+ background:#202020;
+ color:#fff;
+ outline:none;
+ font-size:12px;
+}
+.history-search:focus{border-color:#777}
+\n</style>
+</head>
+<body>
+<div class="mobile-backdrop" id="backdrop" onclick="toggleMenu()"></div>
+<div class="app">
+<aside class="sidebar" id="sidebar">
+  <div class="brand"><div class="logo">D</div><span>DCO CYBER AI</span></div>
+  <button class="newchat" onclick="newChat()">＋ New chat</button>
+  <div class="navtitle">CHAT HISTORY</div>
+  <button id="clearHistory" class="newchat"
+style="margin-top:6px;background:#292020;color:#ff9999">
+Clear all history
+</button>
+<input id="historySearch" class="history-search"
+placeholder="Search conversations..." type="search">
+  <div id="chatHistory" class="chat-history">
+    <div class="history-empty">Your conversations will appear here.</div>
+  </div>
+  <div class="navtitle">ANALYSIS HISTORY</div>
+  <input id="analysisHistorySearch" class="history-search"
+    placeholder="Search analyses..." type="search">
+  <div id="analysisHistory" class="chat-history">
+    <div class="history-empty">Your saved analyses will appear here.</div>
+  </div>
+
+  <div class="navtitle">WORKSPACE</div>
+  <a class="navlink" href="/">◉ <span>AI Assistant</span></a>
+  <a class="navlink" href="/phishing.html">⌕ <span>Phishing Analyzer</span></a>
+  <a class="navlink" href="/modules.html">⌘ <span>Security Intelligence</span></a>
+
+  <div class="navtitle">SECURITY MODULES</div>
+  <a class="navlink" href="/modules.html">◈ <span>Threat Intelligence</span></a>
+  <a class="navlink" href="/modules.html">⌕ <span>Digital Forensics</span></a>
+  <a class="navlink" href="/modules.html">▤ <span>Report Generator</span></a>
+
+  <div class="sidebar-bottom">
+    <div class="profile">DCO CYBER SOLUTIONS<br><span style="color:#777">Defensive AI workspace</span></div>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <div class="top-left">
+      <button class="menu" onclick="toggleMenu()" aria-label="Toggle navigation">☰</button>
+      <strong>AI Assistant</strong>
+    </div>
+    <div class="top-right">
+      <select id="aiMode" class="mode-select" aria-label="Choose AI mode">
+        <option value="general">General AI</option>
+        <option value="cybersecurity">Cybersecurity Expert</option>
+        <option value="forensics">Digital Forensics</option>
+        <option value="malware">Malware Analysis</option>
+        <option value="threat">Threat Intelligence</option>
+      </select>
+      <select id="aiModel" class="model-select" aria-label="Choose AI model">
+        <option value="">Loading models...</option>
+      </select>
+      <span class="status">● AI WORKSPACE</span>
+    </div>
+  </div>
+
+  <section class="content">
+    <div class="welcome" id="welcome">
+      <div class="symbol">✳</div>
+      <h1>How can I help you today?</h1>
+      <p>Your intelligent cybersecurity assistant.<br>Ask questions, learn and explore defensive security.</p>
+    </div>
+
+    <div class="suggestions" id="suggestions">
+      <button class="suggestion" onclick="useSuggestion('Explain the fundamentals of digital forensics.')">
+        <strong>⌕ Digital forensics</strong>
+        <span>Understand evidence handling and forensic investigations.</span>
+      </button>
+      <button class="suggestion" onclick="useSuggestion('Explain how to recognise phishing emails and defend against them.')">
+        <strong>◇ Phishing awareness</strong>
+        <span>Learn to recognise suspicious messages.</span>
+      </button>
+      <button class="suggestion" onclick="useSuggestion('Explain threat intelligence and how organisations use it defensively.')">
+        <strong>◈ Threat intelligence</strong>
+        <span>Learn about threat indicators and risk assessment.</span>
+      </button>
+      <button class="suggestion" onclick="useSuggestion('Give me a professional cybersecurity assessment report template.')">
+        <strong>▤ Security reporting</strong>
+        <span>Learn how to document security findings.</span>
+      </button>
+    </div>
+
+    <div class="messages" id="messages" aria-live="polite"></div>
+
+    <div class="composer">
+      <div class="inputbox">
+        <textarea id="question" placeholder="Message DCO CYBER AI..." rows="2"></textarea>
+        <div class="controls">
+          <div class="control-group">
+            <div class="upload-wrap">
+              <button class="plusbtn" id="uploadToggle" type="button" title="Upload files">＋</button>
+              <div class="upload-menu" id="uploadMenu">
+                <button class="upload-option" id="chooseDocument" type="button">▤ Upload document</button>
+                <button class="upload-option" id="chooseImage" type="button">▧ Upload image</button>
+              </div>
+              <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.csv,.md,.log,.json,.js,.py,.html,.css,.sh,.ps1" multiple>
+              <input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" multiple>
+              <div id="imagePreview" style="display:none;flex-wrap:wrap;gap:8px;padding:8px;margin-top:8px;background:#252525;border:1px solid #444;border-radius:12px">
+                <div id="previewItems" style="display:flex;flex-wrap:wrap;gap:8px;width:100%"></div>
+                <div style="width:100%;font-size:11px;color:#aaa">Maximum 4 images per analysis.</div>
+              </div>
+            </div>
+            <button class="toolbtn" id="mic" type="button" title="Voice input" aria-label="Voice input">🎙</button>
+            <button class="toolbtn" id="speakToggle" type="button" title="Toggle spoken answers" aria-label="Toggle spoken answers">🔊</button>
+          </div>
+          <button class="send" id="send">Send ↑</button>
+        </div>
+      </div>
+      <div class="hint">AI can make mistakes. Verify important security findings.</div>
+    </div>
+  </section>
+</main>
+</div>
+
+<script>
+const question=document.getElementById("question");
+const originalSendButton=document.getElementById("send");
+originalSendButton.addEventListener("click",async()=>{
+ if(!pendingImages.length)return;
+ const files=[...pendingImages];
+ clearImagePreview();
+ await analyseUploadedImages(files);
+});
+const messages=document.getElementById("messages");
+const chatHistory=document.getElementById("chatHistory");
+let currentChatId=null;
+const welcome=document.getElementById("welcome");
+const suggestions=document.getElementById("suggestions");
+const send=document.getElementById("send");
+const aiMode=document.getElementById("aiMode");
+const aiModel=document.getElementById("aiModel");
+
+async function loadAIModels(){
+ try{
+  const response=await fetch("/api/models");
+  const data=await response.json();
+  if(!response.ok)throw new Error(data.error||"Model list unavailable.");
+
+  aiModel.textContent="";
+  (data.models||[]).forEach(model=>{
+   const option=document.createElement("option");
+   option.value=model;
+   option.textContent=model;
+   aiModel.appendChild(option);
+  });
+
+  if(data.current && (data.models||[]).includes(data.current)){
+   aiModel.value=data.current;
+  }
+  if(!data.models||!data.models.length){
+   aiModel.add(new Option("No models available",""));
+  }
+ }catch(error){
+  aiModel.textContent="";
+  aiModel.add(new Option("Models unavailable",""));
+  console.error("AI model loading failed:",error);
+ }
+}
+
+loadAIModels();
+
+const mic=document.getElementById("mic");
+const speakToggle=document.getElementById("speakToggle");
+const uploadToggle=document.getElementById("uploadToggle");
+const uploadMenu=document.getElementById("uploadMenu");
+const fileInput=document.getElementById("fileInput");
+const chooseDocument=document.getElementById("chooseDocument");
+
+uploadToggle.onclick=()=>{
+ uploadMenu.classList.toggle("open");
+};
+chooseDocument.onclick=()=>{
+ uploadMenu.classList.remove("open");
+ fileInput.click();
+};
+
+const imageInput=document.getElementById("imageInput");
+const chooseImage=document.getElementById("chooseImage");
+
+chooseImage.onclick=()=>{
+ uploadMenu.classList.remove("open");
+ imageInput.click();
+};
+
+let pendingImages = [];
+let previewUrls = [];
+
+const imagePreview=document.getElementById("imagePreview");
+const previewItems=document.getElementById("previewItems");
+
+function clearImagePreview(){
+ previewUrls.forEach(url=>URL.revokeObjectURL(url));
+ previewUrls=[];
+ pendingImages=[];
+ previewItems.innerHTML="";
+ imagePreview.style.display="none";
+ imageInput.value="";
+}
+
+function renderImagePreviews(){
+ previewItems.innerHTML="";
+ imagePreview.style.display=pendingImages.length?"flex":"none";
+
+ pendingImages.forEach((file,index)=>{
+  const url=URL.createObjectURL(file);
+  previewUrls.push(url);
+
+  const card=document.createElement("div");
+  card.style.cssText="display:flex;align-items:center;gap:7px;padding:6px;background:#303030;border:1px solid #484848;border-radius:9px;max-width:100%";
+
+  const img=document.createElement("img");
+  img.src=url;
+  img.alt="Selected image";
+  img.style.cssText="width:48px;height:48px;object-fit:cover;border-radius:7px";
+
+  const name=document.createElement("span");
+  name.textContent=file.name;
+  name.style.cssText="font-size:11px;color:#ddd;max-width:100px;overflow-wrap:anywhere";
+
+  const remove=document.createElement("button");
+  remove.type="button";
+  remove.textContent="×";
+  remove.title="Remove image";
+  remove.style.cssText="background:#414141;color:white;border:0;border-radius:7px;padding:5px 9px";
+  remove.onclick=()=>{
+   pendingImages.splice(index,1);
+   previewUrls.forEach(url=>URL.revokeObjectURL(url));
+   previewUrls=[];
+   renderImagePreviews();
+  };
+
+  card.append(img,name,remove);
+  previewItems.appendChild(card);
+ });
+}
+
+async function analyseUploadedImages(files){
+ if(!files.length)return;
+
+ const prompt=question.value.trim() ||
+  "Describe these images, identify important details, and compare them where useful.";
+
+ const formData=new FormData();
+ files.forEach(file=>formData.append("files",file));
+ formData.append("prompt",prompt);
+
+ welcome.style.display="none";
+ suggestions.style.display="none";
+
+ addMessage("Analyse "+files.length+" image(s): "+files.map(f=>f.name).join(", "),"user");
+
+ const loading=addMessage("DCO CYBER AI is examining "+files.length+" image(s)...","assistant");
+
+ try{
+  const response=await fetch("/api/image-analysis",{method:"POST",body:formData});
+  const data=await response.json();
+
+  if(!response.ok)throw new Error(data.error||"Image analysis failed.");
+
+  const result=data.analysis||"No analysis returned.";
+  loading.firstChild.textContent=result;
+
+  const pdfLink=document.createElement("a");
+  pdfLink.href="/api/analyses/"+encodeURIComponent(data.id)+"/pdf";
+  pdfLink.textContent="Download PDF report";
+  pdfLink.className="history-delete";
+  pdfLink.style.display="inline-block";
+  pdfLink.style.marginTop="8px";
+  loading.appendChild(pdfLink);
+
+  await loadAnalysisHistory();
+  if(voiceEnabled)speak(result);
+ }catch(error){
+  loading.firstChild.textContent="Unable to analyse images: "+error.message;
+ }finally{
+  question.value="";
+ }
+}
+
+async function analyseUploadedFiles(files){
+ if(!files || !files.length)return;
+
+ const selected=Array.from(files).slice(0,4);
+ const prompt=question.value.trim() || "Analyse and compare these documents. Identify key findings, similarities, differences, and limitations.";
+
+ const formData=new FormData();
+ selected.forEach(file=>formData.append("files",file));
+ formData.append("prompt",prompt);
+
+ welcome.style.display="none";
+ suggestions.style.display="none";
+
+ addMessage("Analyse documents: "+selected.map(file=>file.name).join(", "),"user");
+
+ const loading=addMessage("DCO CYBER AI is analysing your documents together...","assistant");
+
+ try{
+  const response=await fetch("/api/file-analysis",{method:"POST",body:formData});
+  const data=await response.json();
+
+  if(!response.ok)throw new Error(data.error||"Upload failed.");
+
+  const result=data.analysis||"No analysis returned.";
+  loading.firstChild.textContent=result;
+
+  if(data.id){
+   const pdfLink=document.createElement("a");
+   pdfLink.href="/api/analyses/"+encodeURIComponent(data.id)+"/pdf";
+   pdfLink.textContent="Download PDF report";
+   pdfLink.className="history-delete";
+   pdfLink.style.display="inline-block";
+   pdfLink.style.marginTop="8px";
+   loading.appendChild(pdfLink);
+   await loadAnalysisHistory();
+  }
+
+  if(voiceEnabled)speak(result);
+ }catch(error){
+  loading.firstChild.textContent="Unable to analyse documents: "+error.message;
+ }finally{
+  question.value="";
+ }
+}
+
+fileInput.onchange=async()=>{
+ const files=Array.from(fileInput.files||[]);
+ if(files.length>4){
+  alert("Choose no more than 4 documents at a time.");
+ }else if(files.length){
+  await analyseUploadedFiles(files);
+ }
+ fileInput.value="";
+};
+
+imageInput.onchange=()=>{
+ const selected=Array.from(imageInput.files||[]);
+ if(!selected.length)return;
+
+ const valid=selected.filter(file=>
+  ["image/png","image/jpeg","image/webp"].includes(file.type)
+ );
+
+ if(valid.length!==selected.length){
+  alert("Only PNG, JPG, JPEG and WebP images are supported.");
+ }
+
+ const remaining=4-pendingImages.length;
+ if(valid.length>remaining){
+  alert("You can attach a maximum of 4 images.");
+ }
+
+ pendingImages.push(...valid.slice(0,Math.max(0,remaining)));
+ renderImagePreviews();
+ imageInput.value="";
+};
+
+let voiceEnabled=true;
+let recognition=null;
+
+function toggleMenu(){
+ document.getElementById("sidebar").classList.toggle("open");
+ document.getElementById("backdrop").classList.toggle("show");
+}
+
+function newChat(){
+ currentChatId=null;
+ messages.innerHTML="";
+ welcome.style.display="";
+ suggestions.style.display="";
+ question.value="";
+ if(window.speechSynthesis) speechSynthesis.cancel();
+ loadChatHistory();
+ if(window.innerWidth<=700){
+  document.getElementById("sidebar").classList.remove("open");
+  document.getElementById("backdrop").classList.remove("show");
+ }
+ question.focus();
+}
+
+const historySearch=document.getElementById("historySearch");
+let savedChats=[];
+
+historySearch.addEventListener("input",()=>{
+ renderChatHistory(historySearch.value);
+});
+
+function renderChatHistory(query=""){
+ chatHistory.innerHTML="";
+ const filtered=savedChats.filter(chat=>
+  chat.title.toLowerCase().includes(query.trim().toLowerCase())
+ );
+
+ if(!filtered.length){
+  chatHistory.textContent=query.trim()
+   ?"No matching conversations."
+   :"No saved conversations yet.";
+  return;
+ }
+
+ filtered.forEach(chat=>{
+  const item=document.createElement("div");
+  item.className="history-item"+(chat.id===currentChatId?" active":"");
+
+  const open=document.createElement("button");
+  open.className="history-open";
+  open.textContent=chat.title;
+  open.onclick=()=>openChat(chat.id);
+
+  const rename=document.createElement("button");
+  rename.className="history-delete";
+  rename.textContent="✎";
+  rename.title="Rename conversation";
+  rename.onclick=()=>renameChat(chat.id,chat.title);
+
+  const del=document.createElement("button");
+  del.className="history-delete";
+  del.textContent="×";
+  del.title="Delete conversation";
+  del.onclick=()=>deleteChat(chat.id);
+
+  const exportBtn=document.createElement("button");
+  exportBtn.className="history-delete";
+  exportBtn.textContent="↓";
+  exportBtn.title="Export conversation";
+  exportBtn.onclick=()=>exportChat(chat.id);
+
+  item.append(open,rename,exportBtn,del);
+  chatHistory.appendChild(item);
+ });
+}
+
+document.getElementById("clearHistory").onclick=async()=>{
+ if(!confirm("Permanently delete ALL saved conversations?"))return;
+ try{
+  const response=await fetch("/api/chats",{method:"DELETE"});
+  if(!response.ok)throw new Error("Unable to clear history.");
+  currentChatId=null;
+  messages.innerHTML="";
+  welcome.style.display="";
+  suggestions.style.display="";
+  savedChats=[];
+  historySearch.value="";
+  renderChatHistory();
+ }catch(error){
+  alert(error.message);
+ }
+};
+
+async function loadChatHistory(){
+ try{
+  const response=await fetch("/api/chats");
+  if(!response.ok)throw new Error("History unavailable");
+  savedChats=await response.json();
+  renderChatHistory(historySearch.value);
+ }catch(error){
+  chatHistory.textContent="Unable to load chat history.";
+ }
+}
+
+async function exportChat(id){
+ try{
+  const response=await fetch("/api/chats/"+encodeURIComponent(id));
+  const chat=await response.json();
+  if(!response.ok)throw new Error(chat.error||"Export failed.");
+
+  const content=[
+   "DCO CYBER AI - CONVERSATION",
+   "Title: "+chat.title,
+   "Date: "+new Date(chat.createdAt).toLocaleString(),
+   "",
+   ...chat.messages.map(m=>
+    (m.role==="assistant"?"DCO CYBER AI":"USER")+":\n"+m.content+"\n"
+   )
+  ].join("\n");
+
+  const blob=new Blob([content],{type:"text/plain;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a");
+  link.href=url;
+  link.download=(chat.title||"DCO-chat")
+   .replace(/[^a-z0-9-_]/gi,"_")+".txt";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+ }catch(error){
+  alert(error.message);
+ }
+}
+
+async function renameChat(id,currentTitle){
+ const title=prompt("Enter a new conversation title:",currentTitle);
+ if(title===null)return;
+ if(!title.trim()){
+  alert("Title cannot be empty.");
+  return;
+ }
+ try{
+  const response=await fetch("/api/chats/"+encodeURIComponent(id),{
+   method:"PATCH",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({title:title.trim()})
+  });
+  const data=await response.json();
+  if(!response.ok)throw new Error(data.error||"Rename failed.");
+  await loadChatHistory();
+ }catch(error){
+  alert(error.message);
+ }
+}
+
+async function openChat(id){
+ try{
+  const response=await fetch("/api/chats/"+encodeURIComponent(id));
+  const chat=await response.json();
+  if(!response.ok)throw new Error(chat.error||"Unable to open chat.");
+  currentChatId=chat.id;
+  messages.innerHTML="";
+  welcome.style.display="none";
+  suggestions.style.display="none";
+  chat.messages.forEach(m=>addMessage(m.content,m.role==="assistant"?"assistant":"user"));
+  loadChatHistory();
+  if(window.innerWidth<=700){
+   document.getElementById("sidebar").classList.remove("open");
+   document.getElementById("backdrop").classList.remove("show");
+  }
+ }catch(error){
+  alert(error.message);
+ }
+}
+
+async function deleteChat(id){
+ if(!confirm("Delete this conversation permanently?"))return;
+ try{
+  const response=await fetch("/api/chats/"+encodeURIComponent(id),{method:"DELETE"});
+  if(!response.ok)throw new Error("Could not delete conversation.");
+  if(currentChatId===id)newChat();
+  else loadChatHistory();
+ }catch(error){
+  alert(error.message);
+ }
+}
+
+function useSuggestion(text){
+ question.value=text;
+ question.focus();
+ sendMessage();
+}
+
+
+const analysisHistory=document.getElementById("analysisHistory");
+const analysisHistorySearch=document.getElementById("analysisHistorySearch");
+
+async function loadAnalysisHistory(){
+ try{
+  const response=await fetch("/api/analyses");
+  if(!response.ok)throw new Error("Unable to load analysis history.");
+  const items=await response.json();
+  renderAnalysisHistory(items);
+ }catch(error){
+  analysisHistory.textContent=error.message;
+ }
+}
+
+function renderAnalysisHistory(items){
+ const query=(analysisHistorySearch.value||"").trim().toLowerCase();
+ analysisHistory.innerHTML="";
+ const filtered=items.filter(item=>
+  (item.title+" "+(item.filenames||[]).join(" ")).toLowerCase().includes(query)
+ );
+
+ if(!filtered.length){
+  analysisHistory.textContent=query?"No matching analyses.":"No saved analyses yet.";
+  return;
+ }
+
+ filtered.forEach(item=>{
+  const row=document.createElement("div");
+  row.className="history-item";
+  row.style.flexWrap="wrap";
+
+  const open=document.createElement("button");
+  open.className="history-open";
+  open.textContent=item.title+" · "+new Date(item.createdAt).toLocaleDateString();
+  open.onclick=()=>openSavedAnalysis(item.id);
+
+  const pdf=document.createElement("button");
+  pdf.className="history-delete";
+  pdf.textContent="PDF";
+  pdf.title="Download PDF report";
+  pdf.onclick=()=>{
+   const link=document.createElement("a");
+   link.href="/api/analyses/"+encodeURIComponent(item.id)+"/pdf";
+   link.download="";
+   document.body.appendChild(link);
+   link.click();
+   link.remove();
+  };
+
+  const remove=document.createElement("button");
+  remove.className="history-delete";
+  remove.textContent="×";
+  remove.title="Delete saved analysis";
+  remove.onclick=()=>deleteSavedAnalysis(item.id);
+
+  row.append(open,pdf,remove);
+  analysisHistory.appendChild(row);
+ });
+}
+
+async function openSavedAnalysis(id){
+ try{
+  const response=await fetch("/api/analyses/"+encodeURIComponent(id));
+  const item=await response.json();
+  if(!response.ok)throw new Error(item.error||"Unable to open analysis.");
+
+  welcome.style.display="none";
+  suggestions.style.display="none";
+  messages.innerHTML="";
+
+  addMessage("Saved analysis: "+item.title,"user");
+  addMessage(item.analysis,"assistant");
+
+  (Array.isArray(item.qaHistory) ? item.qaHistory : []).forEach(entry=>{
+   if(entry && typeof entry.content==="string"){
+    addMessage(entry.content,entry.role==="assistant"?"assistant":"user");
+   }
+  });
+
+  if(item.documentText){
+   const panel=document.createElement("div");
+   panel.style.cssText="padding:14px;margin:12px 0;background:#252525;border:1px solid #555;border-radius:12px;";
+
+   const heading=document.createElement("strong");
+   heading.textContent="Ask questions about these documents";
+   heading.style.display="block";
+   heading.style.marginBottom="10px";
+
+   const input=document.createElement("textarea");
+   input.placeholder="Ask a follow-up question...";
+   input.maxLength=2000;
+   input.rows=3;
+   input.style.cssText="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;background:#171717;color:white;border:1px solid #555;";
+
+   const send=document.createElement("button");
+   send.type="button";
+   send.textContent="Ask question";
+   send.style.cssText="margin-top:8px;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;";
+
+   const status=document.createElement("div");
+   status.style.cssText="margin-top:10px;white-space:pre-wrap;";
+
+   send.onclick=()=>sendSavedAnalysisQuestion(id,input,send,status);
+   input.addEventListener("keydown",event=>{
+    if(event.key==="Enter" && !event.shiftKey){
+     event.preventDefault();
+     sendSavedAnalysisQuestion(id,input,send,status);
+    }
+   });
+
+   panel.append(heading,input,send,status);
+   messages.appendChild(panel);
+   panel.scrollIntoView({behavior:"smooth",block:"nearest"});
+  }
+ }catch(error){
+  alert(error.message);
+ }
+}
+
+async function sendSavedAnalysisQuestion(id,input,send,status){
+ const questionText=input.value.trim();
+ if(!questionText || send.disabled)return;
+
+ send.disabled=true;
+ status.textContent="Searching the saved document contents...";
+
+ try{
+  const response=await fetch("/api/analyses/"+encodeURIComponent(id)+"/questions",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({question:questionText})
+  });
+
+  const data=await response.json();
+  if(!response.ok)throw new Error(data.error||"Unable to answer question.");
+
+  addMessage(questionText,"user");
+  addMessage(data.answer||"No answer returned.","assistant");
+  input.value="";
+  status.textContent="";
+ }catch(error){
+  status.textContent="Error: "+error.message;
+ }finally{
+  send.disabled=false;
+ }
+}
+
+async function deleteSavedAnalysis(id){
+ if(!confirm("Delete this saved analysis?"))return;
+ try{
+  const response=await fetch("/api/analyses/"+encodeURIComponent(id),{method:"DELETE"});
+  if(!response.ok)throw new Error("Unable to delete analysis.");
+  await loadAnalysisHistory();
+ }catch(error){
+  alert(error.message);
+ }
+}
+
+analysisHistorySearch.addEventListener("input",loadAnalysisHistory);
+loadAnalysisHistory();
+
+function addMessage(text,type){
+ const box=document.createElement("div");
+ box.className="message "+type;
+ const content=document.createElement("div");
+ content.textContent=text;
+ box.appendChild(content);
+
+ if(type==="assistant"){
+  const actions=document.createElement("div");
+  actions.className="message-actions";
+  const copy=document.createElement("button");
+  copy.textContent="Copy";
+  copy.onclick=()=>navigator.clipboard?.writeText(text);
+  const listen=document.createElement("button");
+  listen.textContent="🔊 Listen";
+  listen.onclick=()=>speak(text);
+  actions.append(copy,listen);
+  box.appendChild(actions);
+ }
+ messages.appendChild(box);
+ box.scrollIntoView({behavior:"smooth",block:"nearest"});
+ return box;
+}
+
+function speak(text){
+ if(!("speechSynthesis" in window)){
+  alert("Speech playback is not supported by this browser.");
+  return;
+ }
+ speechSynthesis.cancel();
+ const utterance=new SpeechSynthesisUtterance(text);
+ utterance.lang="en";
+ utterance.rate=1;
+ speechSynthesis.speak(utterance);
+}
+
+speakToggle.onclick=()=>{
+ voiceEnabled=!voiceEnabled;
+ speakToggle.textContent=voiceEnabled?"🔊 Voice on":"🔇 Voice off";
+ if(!voiceEnabled && window.speechSynthesis) speechSynthesis.cancel();
+};
+
+let activeChatController = null;
+
+async function sendMessage(){
+ const text=question.value.trim();
+
+ if(!text || activeChatController)return;
+
+ if(!currentChatId){
+  try{
+   const created=await fetch("/api/chats",{method:"POST"});
+   const chat=await created.json();
+
+   if(!created.ok)throw new Error(chat.error||"Could not create chat.");
+
+   currentChatId=chat.id;
+  }catch(error){
+   alert("Unable to start chat: "+error.message);
+   return;
+  }
+ }
+
+ welcome.style.display="none";
+ suggestions.style.display="none";
+
+ addMessage(text,"user");
+ question.value="";
+
+ activeChatController=new AbortController();
+
+ send.disabled=false;
+ send.textContent="Stop ■";
+ send.classList.add("stop");
+
+ const loading=addMessage("","assistant");
+ let answer="";
+ let completed=false;
+
+ try{
+  const response=await fetch("/api/chat",{
+   method:"POST",
+   signal:activeChatController.signal,
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    message:text,
+    chatId:currentChatId,
+    mode:aiMode.value,
+    model:aiModel.value
+   })
+  });
+
+  if(!response.ok){
+   const data=await response.json();
+   throw new Error(data.error||"Request failed.");
+  }
+
+  const reader=response.body.getReader();
+  const decoder=new TextDecoder();
+
+  let buffer="";
+  let eventName="";
+
+  function processStreamLine(line){
+   if(line.startsWith("event:")){
+    eventName=line.slice(6).trim();
+    return;
+   }
+
+   if(!line.startsWith("data:"))return;
+
+   const payload=line.slice(5).trim();
+
+   try{
+    const data=JSON.parse(payload);
+
+    if(eventName==="token"){
+     answer+=data.token||"";
+     loading.firstChild.textContent=answer;
+     loading.scrollIntoView({behavior:"smooth",block:"nearest"});
+    }
+
+    if(eventName==="done"){
+     completed=true;
+    }
+
+    if(eventName==="error"){
+     throw new Error(data.error||"Streaming failed.");
+    }
+   }finally{
+    eventName="";
+   }
+  }
+
+  while(true){
+   const {done,value}=await reader.read();
+
+   if(done)break;
+
+   buffer+=decoder.decode(value,{stream:true});
+
+   const lines=buffer.split("\n");
+   buffer=lines.pop()||"";
+
+   for(const line of lines){
+    if(line.trim()===""){
+     eventName="";
+    }else{
+     processStreamLine(line.trimEnd());
+    }
+   }
+  }
+
+  buffer+=decoder.decode();
+
+  if(buffer.trim()){
+   processStreamLine(buffer.trimEnd());
+  }
+
+  if(!answer){
+   loading.firstChild.textContent="No response received.";
+  }
+
+  if(completed && voiceEnabled && answer){
+   speak(answer);
+  }
+
+ }catch(error){
+  if(error.name==="AbortError"){
+   if(!answer){
+    loading.firstChild.textContent="Generation stopped.";
+   }
+  }else if(answer){
+   loading.firstChild.textContent=answer+"\n\nResponse interrupted: "+error.message;
+  }else{
+   loading.firstChild.textContent="Unable to connect: "+error.message;
+  }
+ }finally{
+  activeChatController=null;
+  send.disabled=false;
+  send.textContent="Send ↑";
+  send.classList.remove("stop");
+
+  loadChatHistory();
+  question.focus();
+ }
+}
+
+send.onclick=()=>{
+ if(activeChatController){
+  activeChatController.abort();
+ }else{
+  sendMessage();
+ }
+};
+question.addEventListener("keydown",e=>{
+ if(e.key==="Enter"&&!e.shiftKey){
+  e.preventDefault();
+  sendMessage();
+ }
+});
+
+const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SpeechRecognition){
+ recognition=new SpeechRecognition();
+ recognition.lang="en-NG";
+ recognition.interimResults=false;
+ recognition.onstart=()=>mic.textContent="🎙 Listening...";
+ recognition.onend=()=>mic.textContent="🎙 Voice";
+ recognition.onresult=event=>{
+  question.value+=(question.value?" ":"")+event.results[0][0].transcript;
+  question.focus();
+ };
+ recognition.onerror=()=>mic.textContent="🎙 Try again";
+ mic.onclick=()=>recognition.start();
+}else{
+ mic.onclick=()=>alert("Voice input is not supported in this browser. Try an updated Chrome browser.");
+}
+
+loadChatHistory();
+</script>
+</body>
+</html>
+
+<style>
+#chooseImage {
+  padding: 6px 8px;
+  font-size: 12px;
+  border-radius: 6px;
+  max-width: 145px;
+}
+</style>
+
+<style>
+.upload-menu {
+  box-sizing: border-box;
+  width: 180px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.upload-option {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  padding: 8px;
+  font-size: 12px;
+  white-space: normal;
+}
+
+#chooseImage {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+}
+</style>
