@@ -152,24 +152,21 @@ textarea::placeholder{color:#999}
 <body>
 
 <div class="auth-screen" id="authScreen">
- <div class="auth-card">
-  <div class="logo" style="margin-bottom:18px">D</div>
-  <h1 id="authTitle">DCO CYBER AI</h1>
-  <p id="authDescription">Preparing your private AI workspace...</p>
+  <div class="auth-card">
+    <div class="logo" style="margin-bottom:18px">D</div>
+    <h1 id="authTitle">DCO CYBER AI</h1>
+    <p id="authDescription">Starting your secure AI workspace...</p>
+    <p class="auth-message" id="authMessage" aria-live="polite">Connecting securely...</p>
 
-  <form id="authForm" style="display:none">
-    <input id="authEmail" type="email" placeholder="Email address"
-    autocomplete="email" required>
-   <input id="authPassword" type="password" placeholder="Password"
-    autocomplete="current-password" required>
-   <button class="auth-submit" id="authSubmit" type="submit">Sign in</button>
-  </form>
-
-  <button class="auth-secondary" id="authReset" type="button" style="display:none">
-   Forgot password?
-  </button>
-  <p class="auth-message" id="authMessage" aria-live="polite">Connecting securely...</p>
- </div>
+    <div style="display:none">
+      <form id="authForm">
+        <input id="authEmail" type="email">
+        <input id="authPassword" type="password">
+        <button id="authSubmit" type="submit">Sign in</button>
+      </form>
+      <button id="authReset" type="button">Forgot password?</button>
+    </div>
+  </div>
 </div>
 
 <div class="mobile-backdrop" id="backdrop" onclick="toggleMenu()"></div>
