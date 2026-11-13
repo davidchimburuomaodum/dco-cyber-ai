@@ -158,18 +158,13 @@ textarea::placeholder{color:#999}
   <p id="authDescription">Sign in to access your private AI workspace.</p>
 
   <form id="authForm">
-   <input id="authName" type="text" placeholder="Full name"
-    autocomplete="name" class="auth-hidden">
-   <input id="authEmail" type="email" placeholder="Email address"
+    <input id="authEmail" type="email" placeholder="Email address"
     autocomplete="email" required>
    <input id="authPassword" type="password" placeholder="Password"
     autocomplete="current-password" required>
    <button class="auth-submit" id="authSubmit" type="submit">Sign in</button>
   </form>
 
-  <button class="auth-secondary" id="authSwitch" type="button">
-   Create an account
-  </button>
   <button class="auth-secondary" id="authReset" type="button">
    Forgot password?
   </button>
@@ -299,18 +294,18 @@ placeholder="Search conversations..." type="search">
 
 const authScreen = document.getElementById("authScreen");
 const authForm = document.getElementById("authForm");
-const authName = document.getElementById("authName");
+
 const authEmail = document.getElementById("authEmail");
 const authPassword = document.getElementById("authPassword");
 const authTitle = document.getElementById("authTitle");
 const authDescription = document.getElementById("authDescription");
 const authSubmit = document.getElementById("authSubmit");
-const authSwitch = document.getElementById("authSwitch");
+
 const authReset = document.getElementById("authReset");
 const authMessage = document.getElementById("authMessage");
 
 let supabaseClient = null;
-let authMode = "login";
+
 
 async function apiFetch(url, options = {}) {
   if (!supabaseClient) throw new Error("Please sign in first.");
@@ -370,28 +365,6 @@ function showAuthMessage(message) {
   authMessage.textContent = message;
 }
 
-function updateAuthForm() {
-  const signup = authMode === "signup";
-  authName.classList.toggle("auth-hidden", !signup);
-  authName.required = signup;
-  authPassword.autocomplete = signup ? "new-password" : "current-password";
-  authTitle.textContent = signup ? "Create your account" : "DCO CYBER AI";
-  authDescription.textContent = signup
-    ? "Register to create your private AI workspace."
-    : "Sign in to your DCO CYBER AI account.";
-  authSubmit.textContent = signup ? "Create account" : "Sign in";
-  authSwitch.textContent = signup
-    ? "Already have an account? Sign in"
-    : "Create an account";
-  authReset.classList.toggle("auth-hidden", signup);
-}
-
-authSwitch.addEventListener("click", () => {
-  authMode = authMode === "login" ? "signup" : "login";
-  showAuthMessage("");
-  updateAuthForm();
-});
-
 authReset.addEventListener("click", async () => {
   if (!supabaseClient) return showAuthMessage("Authentication is not connected.");
   const email = authEmail.value.trim();
@@ -418,27 +391,6 @@ authForm.addEventListener("submit", async (event) => {
   showAuthMessage("Please wait...");
 
   try {
-    if (authMode === "signup") {
-      const fullName = authName.value.trim();
-      if (!fullName) throw new Error("Enter your full name.");
-
-      const { data, error } = await supabaseClient.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: fullName },
-          emailRedirectTo: window.location.origin
-        }
-      });
-
-      if (error) throw error;
-
-      showAuthMessage(
-        data.session
-          ? "Account created. Workspace access will be enabled after private storage setup."
-          : "Registration successful. Check your email and verify your address before signing in."
-      );
-    } else {
       const { error } = await supabaseClient.auth.signInWithPassword({
         email,
         password
@@ -447,7 +399,6 @@ authForm.addEventListener("submit", async (event) => {
       if (error) throw error;
 
       showAuthMessage("Sign-in successful. Opening your private workspace...");
-    }
   } catch (error) {
     showAuthMessage(error.message || "Authentication failed. Please try again.");
   } finally {
