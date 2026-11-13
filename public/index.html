@@ -155,9 +155,9 @@ textarea::placeholder{color:#999}
  <div class="auth-card">
   <div class="logo" style="margin-bottom:18px">D</div>
   <h1 id="authTitle">DCO CYBER AI</h1>
-  <p id="authDescription">Sign in to access your private AI workspace.</p>
+  <p id="authDescription">Preparing your private AI workspace...</p>
 
-  <form id="authForm">
+  <form id="authForm" style="display:none">
     <input id="authEmail" type="email" placeholder="Email address"
     autocomplete="email" required>
    <input id="authPassword" type="password" placeholder="Password"
@@ -165,10 +165,10 @@ textarea::placeholder{color:#999}
    <button class="auth-submit" id="authSubmit" type="submit">Sign in</button>
   </form>
 
-  <button class="auth-secondary" id="authReset" type="button">
+  <button class="auth-secondary" id="authReset" type="button" style="display:none">
    Forgot password?
   </button>
-  <p class="auth-message" id="authMessage" aria-live="polite"></p>
+  <p class="auth-message" id="authMessage" aria-live="polite">Connecting securely...</p>
  </div>
 </div>
 
@@ -205,7 +205,6 @@ placeholder="Search conversations..." type="search">
   <a class="navlink" href="/modules.html">▤ <span>Report Generator</span></a>
 
   <div class="sidebar-bottom">
-    <button id="signOutButton" class="newchat" type="button">Sign out</button>
     <div class="profile">DCO CYBER SOLUTIONS<br><span style="color:#777">Defensive AI workspace</span></div>
   </div>
 </aside>
@@ -313,7 +312,7 @@ async function apiFetch(url, options = {}) {
   const { data, error } = await supabaseClient.auth.getSession();
   const session = data && data.session;
 
-  if (error || !session || !session.user.email_confirmed_at) {
+  if (error || !session || (!session.user.is_anonymous && !session.user.email_confirmed_at)) {
     throw new Error("Your verified session has expired. Please sign in again.");
   }
 
@@ -342,7 +341,7 @@ async function downloadAnalysisPdf(id, filename = "analysis-report.pdf") {
 }
 
 function showWorkspace(session) {
-  if (!session || !session.user || !session.user.email_confirmed_at) {
+  if (!session || !session.user || (!session.user.is_anonymous && !session.user.email_confirmed_at)) {
     hideWorkspace();
     showAuthMessage("Please verify your email before accessing the workspace.");
     return;
@@ -408,12 +407,17 @@ authForm.addEventListener("submit", async (event) => {
 
 async function initialiseSupabaseAuth() {
   try {
-    if (!window.supabase) throw new Error("Supabase browser library did not load.");
+    if (!window.supabase) {
+      throw new Error("Supabase browser library did not load.");
+    }
 
     const response = await window.fetch("/api/config");
-    if (!response.ok) throw new Error("Could not load Supabase configuration.");
+    if (!response.ok) {
+      throw new Error("Could not load Supabase configuration.");
+    }
 
     const config = await response.json();
+
     if (!config.supabaseUrl || !config.supabasePublishableKey) {
       throw new Error("Supabase configuration is missing.");
     }
@@ -423,59 +427,42 @@ async function initialiseSupabaseAuth() {
       config.supabasePublishableKey
     );
 
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT") {
-        hideWorkspace();
-        showAuthMessage("You have signed out.");
-      } else if (session && event === "SIGNED_IN") {
-        if (session.user.email_confirmed_at) {
-          showWorkspace(session);
-          showAuthMessage("Signed in successfully.");
-        } else {
-          hideWorkspace();
-          showAuthMessage("Please verify your email before accessing the workspace.");
-        }
-      }
-    });
-
     const { data, error } = await supabaseClient.auth.getSession();
     if (error) throw error;
 
-    if (data.session && data.session.user.email_confirmed_at) {
-      showWorkspace(data.session);
-      showAuthMessage("Welcome back.");
-    } else {
-      hideWorkspace();
-      showAuthMessage(
-        data.session
-          ? "Please verify your email before accessing the workspace."
-          : "Supabase connected. Sign in or create an account."
-      );
+    let session = data.session;
+
+    if (!session) {
+      const result = await supabaseClient.auth.signInAnonymously();
+      if (result.error) throw result.error;
+      session = result.data.session;
     }
+
+    if (!session) {
+      throw new Error("Unable to create a private session.");
+    }
+
+    showWorkspace(session);
+
+    supabaseClient.auth.onAuthStateChange((event, newSession) => {
+      if (event === "SIGNED_IN" && newSession) {
+        showWorkspace(newSession);
+      } else if (event === "SIGNED_OUT") {
+        hideWorkspace();
+        showAuthMessage("Session ended. Refresh to create a new session.");
+      }
+    });
+
   } catch (error) {
     hideWorkspace();
-    showAuthMessage(error.message || "Unable to connect to Supabase.");
+    showAuthMessage(
+      error.message || "Unable to start your private workspace."
+    );
+    console.error("Anonymous authentication:", error);
   }
 }
-updateAuthForm();
+
 initialiseSupabaseAuth();
-
-document.getElementById("signOutButton").addEventListener("click", async () => {
-  if (!supabaseClient) return;
-  const button = document.getElementById("signOutButton");
-  button.disabled = true;
-  try {
-    const { error } = await supabaseClient.auth.signOut();
-    if (error) throw error;
-    hideWorkspace();
-    showAuthMessage("You have signed out.");
-  } catch (error) {
-    alert("Sign-out failed: " + error.message);
-  } finally {
-    button.disabled = false;
-  }
-});
-
 
 const question=document.getElementById("question");
 const originalSendButton=document.getElementById("send");

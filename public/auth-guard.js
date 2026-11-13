@@ -27,7 +27,7 @@ window.dcoAuthReady = (async function () {
     const { data, error } = await client.auth.getSession();
 
     if (error || !data.session ||
-        !data.session.user.email_confirmed_at) {
+        (!data.session.user.is_anonymous && !data.session.user.email_confirmed_at)) {
       redirectToLogin();
       throw new Error("Please sign in with a verified account.");
     }
@@ -39,7 +39,7 @@ window.dcoAuthReady = (async function () {
       const session = sessionData && sessionData.session;
 
       if (sessionError || !session ||
-          !session.user.email_confirmed_at) {
+          (!session.user.is_anonymous && !session.user.email_confirmed_at)) {
         redirectToLogin();
         throw new Error("Your session has expired. Please sign in again.");
       }

@@ -56,7 +56,7 @@ async function requireAuth(req, res, next) {
     const supabase = createUserSupabaseClient(token);
     const { data, error } = await supabase.auth.getUser(token);
 
-    if (error || !data.user || !data.user.email_confirmed_at) {
+    if (error || !data.user || (!data.user.is_anonymous && !data.user.email_confirmed_at)) {
       return res.status(401).json({
         error: "Please verify your email and sign in again."
       });
