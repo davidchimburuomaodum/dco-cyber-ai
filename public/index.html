@@ -120,11 +120,65 @@ textarea::placeholder{color:#999}
  font-size:12px;
 }
 .history-search:focus{border-color:#777}
-\n</style>
+\n
+.auth-screen{
+ position:fixed;inset:0;z-index:9999;background:#171717;
+ display:flex;align-items:center;justify-content:center;padding:20px;
+}
+.auth-card{
+ width:100%;max-width:420px;background:#242424;border:1px solid #414141;
+ border-radius:18px;padding:28px;box-shadow:0 15px 50px #0008;
+}
+.auth-card h1{font-size:25px;margin:0 0 8px}
+.auth-card p{color:#aaa;font-size:13px;line-height:1.6}
+.auth-card input{
+ width:100%;padding:13px;margin:7px 0;background:#181818;
+ border:1px solid #484848;border-radius:9px;color:white;outline:none;
+}
+.auth-card input:focus{border-color:#39d98a}
+.auth-submit{
+ width:100%;padding:13px;margin-top:12px;background:#39d98a;
+ color:#082015;border:0;border-radius:9px;font-weight:bold;
+}
+.auth-secondary{
+ width:100%;padding:10px;margin-top:8px;background:transparent;
+ border:1px solid #484848;border-radius:9px;color:#ddd;
+}
+.auth-message{font-size:12px!important;min-height:20px}
+.auth-hidden{display:none!important}
+
+</style>
 </head>
 <body>
+
+<div class="auth-screen" id="authScreen">
+ <div class="auth-card">
+  <div class="logo" style="margin-bottom:18px">D</div>
+  <h1 id="authTitle">DCO CYBER AI</h1>
+  <p id="authDescription">Sign in to access your private AI workspace.</p>
+
+  <form id="authForm">
+   <input id="authName" type="text" placeholder="Full name"
+    autocomplete="name" class="auth-hidden">
+   <input id="authEmail" type="email" placeholder="Email address"
+    autocomplete="email" required>
+   <input id="authPassword" type="password" placeholder="Password"
+    autocomplete="current-password" required>
+   <button class="auth-submit" id="authSubmit" type="submit">Sign in</button>
+  </form>
+
+  <button class="auth-secondary" id="authSwitch" type="button">
+   Create an account
+  </button>
+  <button class="auth-secondary" id="authReset" type="button">
+   Forgot password?
+  </button>
+  <p class="auth-message" id="authMessage" aria-live="polite"></p>
+ </div>
+</div>
+
 <div class="mobile-backdrop" id="backdrop" onclick="toggleMenu()"></div>
-<div class="app">
+<div class="app" id="mainWorkspace" style="display:none">
 <aside class="sidebar" id="sidebar">
   <div class="brand"><div class="logo">D</div><span>DCO CYBER AI</span></div>
   <button class="newchat" onclick="newChat()">＋ New chat</button>
@@ -156,6 +210,7 @@ placeholder="Search conversations..." type="search">
   <a class="navlink" href="/modules.html">▤ <span>Report Generator</span></a>
 
   <div class="sidebar-bottom">
+    <button id="signOutButton" class="newchat" type="button">Sign out</button>
     <div class="profile">DCO CYBER SOLUTIONS<br><span style="color:#777">Defensive AI workspace</span></div>
   </div>
 </aside>
@@ -239,7 +294,238 @@ placeholder="Search conversations..." type="search">
 </main>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+
+const authScreen = document.getElementById("authScreen");
+const authForm = document.getElementById("authForm");
+const authName = document.getElementById("authName");
+const authEmail = document.getElementById("authEmail");
+const authPassword = document.getElementById("authPassword");
+const authTitle = document.getElementById("authTitle");
+const authDescription = document.getElementById("authDescription");
+const authSubmit = document.getElementById("authSubmit");
+const authSwitch = document.getElementById("authSwitch");
+const authReset = document.getElementById("authReset");
+const authMessage = document.getElementById("authMessage");
+
+let supabaseClient = null;
+let authMode = "login";
+
+async function apiFetch(url, options = {}) {
+  if (!supabaseClient) throw new Error("Please sign in first.");
+
+  const { data, error } = await supabaseClient.auth.getSession();
+  const session = data && data.session;
+
+  if (error || !session || !session.user.email_confirmed_at) {
+    throw new Error("Your verified session has expired. Please sign in again.");
+  }
+
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", "Bearer " + session.access_token);
+
+  return window.fetch(url, { ...options, headers });
+}
+
+async function downloadAnalysisPdf(id, filename = "analysis-report.pdf") {
+  const response = await apiFetch(
+    "/api/analyses/" + encodeURIComponent(id) + "/pdf"
+  );
+
+  if (!response.ok) throw new Error("Unable to download PDF report.");
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function showWorkspace(session) {
+  if (!session || !session.user || !session.user.email_confirmed_at) {
+    hideWorkspace();
+    showAuthMessage("Please verify your email before accessing the workspace.");
+    return;
+  }
+
+  document.getElementById("authScreen").style.display = "none";
+  document.getElementById("mainWorkspace").style.display = "";
+
+  loadAIModels();
+  loadChatHistory();
+  loadAnalysisHistory();
+}
+
+function hideWorkspace() {
+  document.getElementById("mainWorkspace").style.display = "none";
+  document.getElementById("authScreen").style.display = "flex";
+}
+
+function showAuthMessage(message) {
+  authMessage.textContent = message;
+}
+
+function updateAuthForm() {
+  const signup = authMode === "signup";
+  authName.classList.toggle("auth-hidden", !signup);
+  authName.required = signup;
+  authPassword.autocomplete = signup ? "new-password" : "current-password";
+  authTitle.textContent = signup ? "Create your account" : "DCO CYBER AI";
+  authDescription.textContent = signup
+    ? "Register to create your private AI workspace."
+    : "Sign in to your DCO CYBER AI account.";
+  authSubmit.textContent = signup ? "Create account" : "Sign in";
+  authSwitch.textContent = signup
+    ? "Already have an account? Sign in"
+    : "Create an account";
+  authReset.classList.toggle("auth-hidden", signup);
+}
+
+authSwitch.addEventListener("click", () => {
+  authMode = authMode === "login" ? "signup" : "login";
+  showAuthMessage("");
+  updateAuthForm();
+});
+
+authReset.addEventListener("click", async () => {
+  if (!supabaseClient) return showAuthMessage("Authentication is not connected.");
+  const email = authEmail.value.trim();
+  if (!email) return showAuthMessage("Enter your email address first.");
+
+  authReset.disabled = true;
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin
+  });
+  authReset.disabled = false;
+  showAuthMessage(error ? error.message : "If the account exists, a password reset email has been sent.");
+});
+
+authForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!supabaseClient) {
+    return showAuthMessage("Supabase is not connected. Refresh and try again.");
+  }
+
+  const email = authEmail.value.trim();
+  const password = authPassword.value;
+  authSubmit.disabled = true;
+  showAuthMessage("Please wait...");
+
+  try {
+    if (authMode === "signup") {
+      const fullName = authName.value.trim();
+      if (!fullName) throw new Error("Enter your full name.");
+
+      const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName },
+          emailRedirectTo: window.location.origin
+        }
+      });
+
+      if (error) throw error;
+
+      showAuthMessage(
+        data.session
+          ? "Account created. Workspace access will be enabled after private storage setup."
+          : "Registration successful. Check your email and verify your address before signing in."
+      );
+    } else {
+      const { error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) throw error;
+
+      showAuthMessage("Sign-in successful. Opening your private workspace...");
+    }
+  } catch (error) {
+    showAuthMessage(error.message || "Authentication failed. Please try again.");
+  } finally {
+    authSubmit.disabled = false;
+  }
+});
+
+async function initialiseSupabaseAuth() {
+  try {
+    if (!window.supabase) throw new Error("Supabase browser library did not load.");
+
+    const response = await window.fetch("/api/config");
+    if (!response.ok) throw new Error("Could not load Supabase configuration.");
+
+    const config = await response.json();
+    if (!config.supabaseUrl || !config.supabasePublishableKey) {
+      throw new Error("Supabase configuration is missing.");
+    }
+
+    supabaseClient = window.supabase.createClient(
+      config.supabaseUrl,
+      config.supabasePublishableKey
+    );
+
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        hideWorkspace();
+        showAuthMessage("You have signed out.");
+      } else if (session && event === "SIGNED_IN") {
+        if (session.user.email_confirmed_at) {
+          showWorkspace(session);
+          showAuthMessage("Signed in successfully.");
+        } else {
+          hideWorkspace();
+          showAuthMessage("Please verify your email before accessing the workspace.");
+        }
+      }
+    });
+
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) throw error;
+
+    if (data.session && data.session.user.email_confirmed_at) {
+      showWorkspace(data.session);
+      showAuthMessage("Welcome back.");
+    } else {
+      hideWorkspace();
+      showAuthMessage(
+        data.session
+          ? "Please verify your email before accessing the workspace."
+          : "Supabase connected. Sign in or create an account."
+      );
+    }
+  } catch (error) {
+    hideWorkspace();
+    showAuthMessage(error.message || "Unable to connect to Supabase.");
+  }
+}
+updateAuthForm();
+initialiseSupabaseAuth();
+
+document.getElementById("signOutButton").addEventListener("click", async () => {
+  if (!supabaseClient) return;
+  const button = document.getElementById("signOutButton");
+  button.disabled = true;
+  try {
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) throw error;
+    hideWorkspace();
+    showAuthMessage("You have signed out.");
+  } catch (error) {
+    alert("Sign-out failed: " + error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+
 const question=document.getElementById("question");
 const originalSendButton=document.getElementById("send");
 originalSendButton.addEventListener("click",async()=>{
@@ -259,7 +545,7 @@ const aiModel=document.getElementById("aiModel");
 
 async function loadAIModels(){
  try{
-  const response=await fetch("/api/models");
+  const response=await apiFetch("/api/models");
   const data=await response.json();
   if(!response.ok)throw new Error(data.error||"Model list unavailable.");
 
@@ -284,7 +570,6 @@ async function loadAIModels(){
  }
 }
 
-loadAIModels();
 
 const mic=document.getElementById("mic");
 const speakToggle=document.getElementById("speakToggle");
@@ -379,7 +664,7 @@ async function analyseUploadedImages(files){
  const loading=addMessage("DCO CYBER AI is examining "+files.length+" image(s)...","assistant");
 
  try{
-  const response=await fetch("/api/image-analysis",{method:"POST",body:formData});
+  const response=await apiFetch("/api/image-analysis",{method:"POST",body:formData});
   const data=await response.json();
 
   if(!response.ok)throw new Error(data.error||"Image analysis failed.");
@@ -387,12 +672,13 @@ async function analyseUploadedImages(files){
   const result=data.analysis||"No analysis returned.";
   loading.firstChild.textContent=result;
 
-  const pdfLink=document.createElement("a");
-  pdfLink.href="/api/analyses/"+encodeURIComponent(data.id)+"/pdf";
+  const pdfLink=document.createElement("button");
+  pdfLink.type="button";
   pdfLink.textContent="Download PDF report";
   pdfLink.className="history-delete";
   pdfLink.style.display="inline-block";
   pdfLink.style.marginTop="8px";
+  pdfLink.onclick=()=>downloadAnalysisPdf(data.id).catch(error=>alert(error.message));
   loading.appendChild(pdfLink);
 
   await loadAnalysisHistory();
@@ -422,7 +708,7 @@ async function analyseUploadedFiles(files){
  const loading=addMessage("DCO CYBER AI is analysing your documents together...","assistant");
 
  try{
-  const response=await fetch("/api/file-analysis",{method:"POST",body:formData});
+  const response=await apiFetch("/api/file-analysis",{method:"POST",body:formData});
   const data=await response.json();
 
   if(!response.ok)throw new Error(data.error||"Upload failed.");
@@ -431,13 +717,14 @@ async function analyseUploadedFiles(files){
   loading.firstChild.textContent=result;
 
   if(data.id){
-   const pdfLink=document.createElement("a");
-   pdfLink.href="/api/analyses/"+encodeURIComponent(data.id)+"/pdf";
-   pdfLink.textContent="Download PDF report";
-   pdfLink.className="history-delete";
-   pdfLink.style.display="inline-block";
-   pdfLink.style.marginTop="8px";
-   loading.appendChild(pdfLink);
+   const pdfLink=document.createElement("button");
+  pdfLink.type="button";
+  pdfLink.textContent="Download PDF report";
+  pdfLink.className="history-delete";
+  pdfLink.style.display="inline-block";
+  pdfLink.style.marginTop="8px";
+  pdfLink.onclick=()=>downloadAnalysisPdf(data.id).catch(error=>alert(error.message));
+  loading.appendChild(pdfLink);
    await loadAnalysisHistory();
   }
 
@@ -559,7 +846,7 @@ function renderChatHistory(query=""){
 document.getElementById("clearHistory").onclick=async()=>{
  if(!confirm("Permanently delete ALL saved conversations?"))return;
  try{
-  const response=await fetch("/api/chats",{method:"DELETE"});
+  const response=await apiFetch("/api/chats",{method:"DELETE"});
   if(!response.ok)throw new Error("Unable to clear history.");
   currentChatId=null;
   messages.innerHTML="";
@@ -575,7 +862,7 @@ document.getElementById("clearHistory").onclick=async()=>{
 
 async function loadChatHistory(){
  try{
-  const response=await fetch("/api/chats");
+  const response=await apiFetch("/api/chats");
   if(!response.ok)throw new Error("History unavailable");
   savedChats=await response.json();
   renderChatHistory(historySearch.value);
@@ -586,7 +873,7 @@ async function loadChatHistory(){
 
 async function exportChat(id){
  try{
-  const response=await fetch("/api/chats/"+encodeURIComponent(id));
+  const response=await apiFetch("/api/chats/"+encodeURIComponent(id));
   const chat=await response.json();
   if(!response.ok)throw new Error(chat.error||"Export failed.");
 
@@ -623,7 +910,7 @@ async function renameChat(id,currentTitle){
   return;
  }
  try{
-  const response=await fetch("/api/chats/"+encodeURIComponent(id),{
+  const response=await apiFetch("/api/chats/"+encodeURIComponent(id),{
    method:"PATCH",
    headers:{"Content-Type":"application/json"},
    body:JSON.stringify({title:title.trim()})
@@ -638,7 +925,7 @@ async function renameChat(id,currentTitle){
 
 async function openChat(id){
  try{
-  const response=await fetch("/api/chats/"+encodeURIComponent(id));
+  const response=await apiFetch("/api/chats/"+encodeURIComponent(id));
   const chat=await response.json();
   if(!response.ok)throw new Error(chat.error||"Unable to open chat.");
   currentChatId=chat.id;
@@ -659,7 +946,7 @@ async function openChat(id){
 async function deleteChat(id){
  if(!confirm("Delete this conversation permanently?"))return;
  try{
-  const response=await fetch("/api/chats/"+encodeURIComponent(id),{method:"DELETE"});
+  const response=await apiFetch("/api/chats/"+encodeURIComponent(id),{method:"DELETE"});
   if(!response.ok)throw new Error("Could not delete conversation.");
   if(currentChatId===id)newChat();
   else loadChatHistory();
@@ -680,7 +967,7 @@ const analysisHistorySearch=document.getElementById("analysisHistorySearch");
 
 async function loadAnalysisHistory(){
  try{
-  const response=await fetch("/api/analyses");
+  const response=await apiFetch("/api/analyses");
   if(!response.ok)throw new Error("Unable to load analysis history.");
   const items=await response.json();
   renderAnalysisHistory(items);
@@ -716,12 +1003,8 @@ function renderAnalysisHistory(items){
   pdf.textContent="PDF";
   pdf.title="Download PDF report";
   pdf.onclick=()=>{
-   const link=document.createElement("a");
-   link.href="/api/analyses/"+encodeURIComponent(item.id)+"/pdf";
-   link.download="";
-   document.body.appendChild(link);
-   link.click();
-   link.remove();
+   downloadAnalysisPdf(item.id, "analysis-report.pdf")
+    .catch(error=>alert(error.message));
   };
 
   const remove=document.createElement("button");
@@ -737,7 +1020,7 @@ function renderAnalysisHistory(items){
 
 async function openSavedAnalysis(id){
  try{
-  const response=await fetch("/api/analyses/"+encodeURIComponent(id));
+  const response=await apiFetch("/api/analyses/"+encodeURIComponent(id));
   const item=await response.json();
   if(!response.ok)throw new Error(item.error||"Unable to open analysis.");
 
@@ -802,7 +1085,7 @@ async function sendSavedAnalysisQuestion(id,input,send,status){
  status.textContent="Searching the saved document contents...";
 
  try{
-  const response=await fetch("/api/analyses/"+encodeURIComponent(id)+"/questions",{
+  const response=await apiFetch("/api/analyses/"+encodeURIComponent(id)+"/questions",{
    method:"POST",
    headers:{"Content-Type":"application/json"},
    body:JSON.stringify({question:questionText})
@@ -825,7 +1108,7 @@ async function sendSavedAnalysisQuestion(id,input,send,status){
 async function deleteSavedAnalysis(id){
  if(!confirm("Delete this saved analysis?"))return;
  try{
-  const response=await fetch("/api/analyses/"+encodeURIComponent(id),{method:"DELETE"});
+  const response=await apiFetch("/api/analyses/"+encodeURIComponent(id),{method:"DELETE"});
   if(!response.ok)throw new Error("Unable to delete analysis.");
   await loadAnalysisHistory();
  }catch(error){
@@ -834,7 +1117,6 @@ async function deleteSavedAnalysis(id){
 }
 
 analysisHistorySearch.addEventListener("input",loadAnalysisHistory);
-loadAnalysisHistory();
 
 function addMessage(text,type){
  const box=document.createElement("div");
@@ -887,7 +1169,7 @@ async function sendMessage(){
 
  if(!currentChatId){
   try{
-   const created=await fetch("/api/chats",{method:"POST"});
+   const created=await apiFetch("/api/chats",{method:"POST"});
    const chat=await created.json();
 
    if(!created.ok)throw new Error(chat.error||"Could not create chat.");
@@ -916,7 +1198,7 @@ async function sendMessage(){
  let completed=false;
 
  try{
-  const response=await fetch("/api/chat",{
+  const response=await apiFetch("/api/chat",{
    method:"POST",
    signal:activeChatController.signal,
    headers:{"Content-Type":"application/json"},
@@ -1055,7 +1337,6 @@ if(SpeechRecognition){
  mic.onclick=()=>alert("Voice input is not supported in this browser. Try an updated Chrome browser.");
 }
 
-loadChatHistory();
 </script>
 </body>
 </html>

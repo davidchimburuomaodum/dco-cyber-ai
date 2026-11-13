@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/auth-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DCO CYBER AI | Phishing Intelligence</title>
@@ -54,7 +56,8 @@ button.onclick=async()=>{
  result.textContent="DCO CYBER AI is analyzing the submitted content...";
  button.disabled=true;
  try{
-  const response=await fetch("/api/phishing-analysis",{
+  await window.dcoAuthReady;
+  const response=await window.dcoApiFetch("/api/phishing-analysis",{
    method:"POST",
    headers:{"Content-Type":"application/json"},
    body:JSON.stringify({content})

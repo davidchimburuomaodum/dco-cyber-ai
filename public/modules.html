@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/auth-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DCO CYBER AI | Security Intelligence Centre</title>
@@ -172,7 +174,8 @@ async function analyse(type) {
   result.textContent = "";
 
   try {
-    const response = await fetch(item.endpoint, {
+    await window.dcoAuthReady;
+    const response = await window.dcoApiFetch(item.endpoint, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({content})

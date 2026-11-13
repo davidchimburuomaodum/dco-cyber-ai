@@ -8,10 +8,72 @@ const multer = require("multer");
 const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
 const PDFDocument = require("pdfkit");
+const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 
 app.use(express.json({limit: "100kb"}));
+
+function createUserSupabaseClient(accessToken) {
+  return createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_PUBLISHABLE_KEY,
+    {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false
+      }
+    }
+  );
+}
+
+async function requireAuth(req, res, next) {
+  try {
+    const authorization = req.headers.authorization || "";
+    const token = authorization.startsWith("Bearer ")
+      ? authorization.slice(7)
+      : "";
+
+    if (!token) {
+      return res.status(401).json({
+        error: "Authentication required. Please sign in."
+      });
+    }
+
+    if (!process.env.SUPABASE_URL ||
+        !process.env.SUPABASE_PUBLISHABLE_KEY) {
+      return res.status(503).json({
+        error: "Authentication service is not configured."
+      });
+    }
+
+    const supabase = createUserSupabaseClient(token);
+    const { data, error } = await supabase.auth.getUser(token);
+
+    if (error || !data.user || !data.user.email_confirmed_at) {
+      return res.status(401).json({
+        error: "Please verify your email and sign in again."
+      });
+    }
+
+    req.user = data.user;
+    req.supabase = supabase;
+
+    next();
+  } catch (error) {
+    console.error("Authentication error:", error.message);
+    res.status(401).json({
+      error: "Unable to verify your session."
+    });
+  }
+}
+
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -55,16 +117,58 @@ function writeAnalyses(items) {
   fs.writeFileSync(analysesFile, JSON.stringify(items, null, 2));
 }
 
-app.get("/api/analyses", (req, res) => {
-  const items = readAnalyses()
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .map(({ id, title, filenames, createdAt }) => ({
-      id, title, filenames, createdAt
-    }));
-  res.json(items);
+
+function analysisFromRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    filenames: row.filenames || [],
+    analysis: row.analysis,
+    documentText: row.document_text || "",
+    qaHistory: row.qa_history || [],
+    createdAt: row.created_at
+  };
+}
+
+function chatFromRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    messages: row.messages || [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+
+app.use("/api", (req, res, next) => {
+  if (req.path === "/config" || req.path === "/health") {
+    return next();
+  }
+  return requireAuth(req, res, next);
 });
 
-app.post("/api/analyses", (req, res) => {
+app.get("/api/analyses", async (req, res) => {
+  const { data, error } = await req.supabase
+    .from("analyses")
+    .select("id,title,filenames,created_at")
+    .eq("user_id", req.user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Analysis list error:", error.message);
+    return res.status(500).json({ error: "Unable to load analysis history." });
+  }
+
+  res.json((data || []).map(row => ({
+    id: row.id,
+    title: row.title,
+    filenames: row.filenames || [],
+    createdAt: row.created_at
+  })));
+});
+
+app.post("/api/analyses", async (req, res) => {
   const title = String(req.body.title || "Image analysis").trim().slice(0, 100);
   const analysis = String(req.body.analysis || "").trim();
   const filenames = Array.isArray(req.body.filenames)
@@ -75,28 +179,51 @@ app.post("/api/analyses", (req, res) => {
     return res.status(400).json({ error: "Analysis is missing or too long." });
   }
 
-  const items = readAnalyses();
   const item = {
     id: crypto.randomUUID(),
+    user_id: req.user.id,
     title,
     filenames,
     analysis,
-    createdAt: Date.now()
+    document_text: null,
+    qa_history: [],
+    created_at: Date.now()
   };
 
-  items.push(item);
-  writeAnalyses(items.slice(-100));
+  const { data, error } = await req.supabase
+    .from("analyses")
+    .insert(item)
+    .select("id,title,created_at")
+    .single();
+
+  if (error) {
+    console.error("Analysis save error:", error.message);
+    return res.status(500).json({ error: "Unable to save analysis." });
+  }
+
   res.status(201).json({
-    id: item.id,
-    title: item.title,
-    createdAt: item.createdAt
+    id: data.id,
+    title: data.title,
+    createdAt: data.created_at
   });
 });
 
-app.get("/api/analyses/:id", (req, res) => {
-  const item = readAnalyses().find(x => x.id === req.params.id);
-  if (!item) return res.status(404).json({ error: "Analysis not found." });
-  res.json(item);
+app.get("/api/analyses/:id", async (req, res) => {
+  const { data, error } = await req.supabase
+    .from("analyses")
+    .select("*")
+    .eq("id", req.params.id)
+    .eq("user_id", req.user.id)
+    .maybeSingle();
+
+  if (error) {
+    return res.status(500).json({ error: "Unable to load analysis." });
+  }
+  if (!data) {
+    return res.status(404).json({ error: "Analysis not found." });
+  }
+
+  res.json(analysisFromRow(data));
 });
 
 app.post("/api/analyses/:id/questions", async (req, res) => {
@@ -109,12 +236,19 @@ app.post("/api/analyses/:id/questions", async (req, res) => {
       });
     }
 
-    const items = readAnalyses();
-    const item = items.find(x => x.id === req.params.id);
+    const { data: row, error } = await req.supabase
+      .from("analyses")
+      .select("*")
+      .eq("id", req.params.id)
+      .eq("user_id", req.user.id)
+      .maybeSingle();
 
-    if (!item) {
+    if (error) throw error;
+    if (!row) {
       return res.status(404).json({ error: "Analysis not found." });
     }
+
+    const item = analysisFromRow(row);
 
     if (!item.documentText) {
       return res.status(400).json({
@@ -122,7 +256,10 @@ app.post("/api/analyses/:id/questions", async (req, res) => {
       });
     }
 
-    const history = Array.isArray(item.qaHistory) ? item.qaHistory.slice(-8) : [];
+    const history = Array.isArray(item.qaHistory)
+      ? item.qaHistory.slice(-8)
+      : [];
+
     const previous = history.map(entry =>
       `${entry.role === "assistant" ? "Assistant" : "User"}: ${entry.content}`
     ).join("\n");
@@ -137,13 +274,19 @@ Distinguish direct evidence from inference and never invent quotations or facts.
       `DOCUMENTS:\n${item.documentText}\n\nPREVIOUS QUESTIONS AND ANSWERS:\n${previous}\n\nNEW QUESTION:\n${question}`
     );
 
-    item.qaHistory = [
+    const qaHistory = [
       ...history,
       { role: "user", content: question },
       { role: "assistant", content: answer }
     ].slice(-10);
 
-    writeAnalyses(items);
+    const { error: updateError } = await req.supabase
+      .from("analyses")
+      .update({ qa_history: qaHistory })
+      .eq("id", req.params.id)
+      .eq("user_id", req.user.id);
+
+    if (updateError) throw updateError;
 
     res.json({ answer });
   } catch (error) {
@@ -154,20 +297,40 @@ Distinguish direct evidence from inference and never invent quotations or facts.
   }
 });
 
-app.delete("/api/analyses/:id", (req, res) => {
-  const items = readAnalyses();
-  const remaining = items.filter(x => x.id !== req.params.id);
-  if (remaining.length === items.length) {
+app.delete("/api/analyses/:id", async (req, res) => {
+  const { data, error } = await req.supabase
+    .from("analyses")
+    .delete()
+    .eq("id", req.params.id)
+    .eq("user_id", req.user.id)
+    .select("id");
+
+  if (error) {
+    return res.status(500).json({ error: "Unable to delete analysis." });
+  }
+  if (!data || !data.length) {
     return res.status(404).json({ error: "Analysis not found." });
   }
-  writeAnalyses(remaining);
+
   res.json({ success: true });
 });
 
-app.get("/api/analyses/:id/pdf", (req, res) => {
-  const item = readAnalyses().find(x => x.id === req.params.id);
-  if (!item) return res.status(404).json({ error: "Analysis not found." });
+app.get("/api/analyses/:id/pdf", async (req, res) => {
+  const { data: row, error } = await req.supabase
+    .from("analyses")
+    .select("*")
+    .eq("id", req.params.id)
+    .eq("user_id", req.user.id)
+    .maybeSingle();
 
+  if (error) {
+    return res.status(500).json({ error: "Unable to load report." });
+  }
+  if (!row) {
+    return res.status(404).json({ error: "Analysis not found." });
+  }
+
+  const item = analysisFromRow(row);
   const doc = new PDFDocument({ margin: 55, size: "A4" });
   const filename = (item.title || "analysis")
     .replace(/[^a-z0-9-_]/gi, "_").slice(0, 60);
@@ -217,29 +380,50 @@ app.get("/api/analyses/:id/pdf", (req, res) => {
   doc.end();
 });
 
+app.get("/api/chats", async (req, res) => {
+  const { data, error } = await req.supabase
+    .from("chats")
+    .select("id,title,updated_at")
+    .eq("user_id", req.user.id)
+    .order("updated_at", { ascending: false });
 
-app.get("/api/chats", (req, res) => {
-  const chats = readChats()
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map(({ id, title, updatedAt }) => ({ id, title, updatedAt }));
-  res.json(chats);
+  if (error) {
+    console.error("Chat list error:", error.message);
+    return res.status(500).json({ error: "Unable to load chat history." });
+  }
+
+  res.json((data || []).map(row => ({
+    id: row.id,
+    title: row.title,
+    updatedAt: row.updated_at
+  })));
 });
 
-app.post("/api/chats", (req, res) => {
-  const chats = readChats();
-  const chat = {
-    id: crypto.randomUUID(),
-    title: "New chat",
-    messages: [],
-    createdAt: Date.now(),
-    updatedAt: Date.now()
-  };
-  chats.push(chat);
-  writeChats(chats);
-  res.status(201).json(chat);
+app.post("/api/chats", async (req, res) => {
+  const now = Date.now();
+
+  const { data, error } = await req.supabase
+    .from("chats")
+    .insert({
+      id: crypto.randomUUID(),
+      user_id: req.user.id,
+      title: "New chat",
+      messages: [],
+      created_at: now,
+      updated_at: now
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    console.error("Chat creation error:", error.message);
+    return res.status(500).json({ error: "Unable to create chat." });
+  }
+
+  res.status(201).json(chatFromRow(data));
 });
 
-app.patch("/api/chats/:id", (req, res) => {
+app.patch("/api/chats/:id", async (req, res) => {
   const title = String(req.body.title || "").trim();
 
   if (!title || title.length > 60) {
@@ -248,44 +432,79 @@ app.patch("/api/chats/:id", (req, res) => {
     });
   }
 
-  const chats = readChats();
-  const chat = chats.find(c => c.id === req.params.id);
+  const { data, error } = await req.supabase
+    .from("chats")
+    .update({ title, updated_at: Date.now() })
+    .eq("id", req.params.id)
+    .eq("user_id", req.user.id)
+    .select("id,title")
+    .maybeSingle();
 
-  if (!chat) {
+  if (error) {
+    return res.status(500).json({ error: "Unable to update chat." });
+  }
+  if (!data) {
     return res.status(404).json({ error: "Chat not found." });
   }
 
-  chat.title = title;
-  chat.updatedAt = Date.now();
-
-  writeChats(chats);
-
-  res.json({
-    success: true,
-    id: chat.id,
-    title: chat.title
-  });
+  res.json({ success: true, id: data.id, title: data.title });
 });
 
-app.delete("/api/chats", (req, res) => {
-  writeChats([]);
+app.delete("/api/chats", async (req, res) => {
+  const { error } = await req.supabase
+    .from("chats")
+    .delete()
+    .eq("user_id", req.user.id);
+
+  if (error) {
+    return res.status(500).json({ error: "Unable to delete conversations." });
+  }
+
   res.json({ success: true, message: "All conversations deleted." });
 });
 
-app.get("/api/chats/:id", (req, res) => {
-  const chat = readChats().find(c => c.id === req.params.id);
-  if (!chat) return res.status(404).json({ error: "Chat not found." });
-  res.json(chat);
-});
+app.get("/api/chats/:id", async (req, res) => {
+  const { data, error } = await req.supabase
+    .from("chats")
+    .select("*")
+    .eq("id", req.params.id)
+    .eq("user_id", req.user.id)
+    .maybeSingle();
 
-app.delete("/api/chats/:id", (req, res) => {
-  const chats = readChats();
-  const remaining = chats.filter(c => c.id !== req.params.id);
-  if (remaining.length === chats.length) {
+  if (error) {
+    return res.status(500).json({ error: "Unable to load chat." });
+  }
+  if (!data) {
     return res.status(404).json({ error: "Chat not found." });
   }
-  writeChats(remaining);
+
+  res.json(chatFromRow(data));
+});
+
+app.delete("/api/chats/:id", async (req, res) => {
+  const { data, error } = await req.supabase
+    .from("chats")
+    .delete()
+    .eq("id", req.params.id)
+    .eq("user_id", req.user.id)
+    .select("id");
+
+  if (error) {
+    return res.status(500).json({ error: "Unable to delete chat." });
+  }
+  if (!data || !data.length) {
+    return res.status(404).json({ error: "Chat not found." });
+  }
+
   res.json({ success: true });
+});
+
+app.get("/api/config", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY
+  });
 });
 
 app.get("/api/health", (req, res) => {
@@ -358,7 +577,7 @@ app.post("/api/chat", async (req, res) => {
   const controller = new AbortController();
   let clientDisconnected = false;
   let chat = null;
-  let chats = null;
+  let persistChat = null;
   let answer = "";
 
   res.on("close", () => {
@@ -400,14 +619,37 @@ app.post("/api/chat", async (req, res) => {
       });
     }
 
-    chats = readChats();
-    chat = chats.find(c => c.id === chatId);
+    const { data: chatRow, error: chatError } = await req.supabase
+      .from("chats")
+      .select("*")
+      .eq("id", chatId)
+      .eq("user_id", req.user.id)
+      .maybeSingle();
 
-    if (!chat) {
+    if (chatError) throw chatError;
+
+    if (!chatRow) {
       return res.status(404).json({
         error: "Chat not found. Start a new chat."
       });
     }
+
+    chat = chatFromRow(chatRow);
+    chat.messages = Array.isArray(chat.messages) ? chat.messages : [];
+
+    persistChat = async () => {
+      const { error } = await req.supabase
+        .from("chats")
+        .update({
+          title: chat.title,
+          messages: chat.messages,
+          updated_at: chat.updatedAt || Date.now()
+        })
+        .eq("id", chatId)
+        .eq("user_id", req.user.id);
+
+      if (error) throw error;
+    };
 
     chat.messages.push({ role: "user", content: message });
 
@@ -416,7 +658,8 @@ app.post("/api/chat", async (req, res) => {
         (message.length > 45 ? "..." : "");
     }
 
-    writeChats(chats);
+    chat.updatedAt = Date.now();
+      await persistChat();
 
     const conversation = chat.messages.slice(-20).map(m => ({
       role: m.role,
@@ -452,7 +695,8 @@ app.post("/api/chat", async (req, res) => {
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       chat.messages.pop();
-      writeChats(chats);
+      chat.updatedAt = Date.now();
+      await persistChat();
 
       return res.status(502).json({
         error: "Groq AI request failed.",
@@ -543,7 +787,7 @@ app.post("/api/chat", async (req, res) => {
       });
 
       chat.updatedAt = Date.now();
-      writeChats(chats);
+      await persistChat();
     }
 
     if (!clientDisconnected && !res.destroyed) {
@@ -561,13 +805,13 @@ app.post("/api/chat", async (req, res) => {
   } catch (error) {
     console.error("Streaming error:", error.message);
 
-    if (answer.trim() && chat && chats) {
+    if (answer.trim() && chat && persistChat) {
       chat.messages.push({
         role: "assistant",
         content: answer
       });
       chat.updatedAt = Date.now();
-      writeChats(chats);
+      await persistChat();
     }
 
     if (!res.headersSent && !res.destroyed) {
@@ -901,16 +1145,22 @@ app.post("/api/image-analysis", (req, res) => {
       const analysis = data.choices?.[0]?.message?.content || "No analysis returned.";
       const filenames = files.map(file => file.originalname);
 
-      const saved = readAnalyses();
       const report = {
         id: crypto.randomUUID(),
+        user_id: req.user.id,
         title: filenames.length ? filenames.join(", ").slice(0, 100) : "Image analysis",
         filenames,
         analysis,
-        createdAt: Date.now()
+        document_text: null,
+        qa_history: [],
+        created_at: Date.now()
       };
-      saved.push(report);
-      writeAnalyses(saved.slice(-100));
+
+      const { error: saveError } = await req.supabase
+        .from("analyses")
+        .insert(report);
+
+      if (saveError) throw saveError;
 
       res.json({
         id: report.id,
@@ -991,19 +1241,22 @@ User's requested task: ${prompt}`,
         `Documents: ${names.join(", ")}\n\nDOCUMENT CONTENTS:\n${extractedText}`
       );
 
-      const saved = readAnalyses();
       const report = {
         id: crypto.randomUUID(),
+        user_id: req.user.id,
         title: names.join(", ").slice(0, 100),
         filenames: names,
-        documentText: extractedText,
-        qaHistory: [],
+        document_text: extractedText,
+        qa_history: [],
         analysis: result,
-        createdAt: Date.now()
+        created_at: Date.now()
       };
 
-      saved.push(report);
-      writeAnalyses(saved.slice(-100));
+      const { error: saveError } = await req.supabase
+        .from("analyses")
+        .insert(report);
+
+      if (saveError) throw saveError;
 
       res.json({
         id: report.id,
