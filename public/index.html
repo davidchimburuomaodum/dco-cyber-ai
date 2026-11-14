@@ -144,33 +144,17 @@ textarea::placeholder{color:#999}
  width:100%;padding:10px;margin-top:8px;background:transparent;
  border:1px solid #484848;border-radius:9px;color:#ddd;
 }
-.auth-message{font-size:12px!important;min-height:20px}
-.auth-hidden{display:none!important}
+
 
 </style>
 </head>
 <body>
 
-<div class="auth-screen" id="authScreen">
-  <div class="auth-card">
-    <div class="logo" style="margin-bottom:18px">D</div>
-    <h1 id="authTitle">DCO CYBER AI</h1>
-    <p id="authDescription">Starting your secure AI workspace...</p>
-    <p class="auth-message" id="authMessage" aria-live="polite">Connecting securely...</p>
 
-    <div style="display:none">
-      <form id="authForm">
-        <input id="authEmail" type="email">
-        <input id="authPassword" type="password">
-        <button id="authSubmit" type="submit">Sign in</button>
-      </form>
-      <button id="authReset" type="button">Forgot password?</button>
-    </div>
-  </div>
 </div>
 
 <div class="mobile-backdrop" id="backdrop" onclick="toggleMenu()"></div>
-<div class="app" id="mainWorkspace" style="display:none">
+<div class="app" id="mainWorkspace">
 <aside class="sidebar" id="sidebar">
   <div class="brand"><div class="logo">D</div><span>DCO CYBER AI</span></div>
   <button class="newchat" onclick="newChat()">＋ New chat</button>
@@ -285,39 +269,36 @@ placeholder="Search conversations..." type="search">
 </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script>
 
-const authScreen = document.getElementById("authScreen");
-const authForm = document.getElementById("authForm");
 
-const authEmail = document.getElementById("authEmail");
-const authPassword = document.getElementById("authPassword");
-const authTitle = document.getElementById("authTitle");
-const authDescription = document.getElementById("authDescription");
-const authSubmit = document.getElementById("authSubmit");
 
-const authReset = document.getElementById("authReset");
-const authMessage = document.getElementById("authMessage");
 
-let supabaseClient = null;
 
+
+
+const DCO_STORAGE = {
+  chats: "dco_cyber_ai_chats",
+  analyses: "dco_cyber_ai_analyses"
+};
+
+function dcoRead(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function dcoWrite(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
 
 async function apiFetch(url, options = {}) {
-  if (!supabaseClient) throw new Error("Please sign in first.");
-
-  const { data, error } = await supabaseClient.auth.getSession();
-  const session = data && data.session;
-
-  if (error || !session || (!session.user.is_anonymous && !session.user.email_confirmed_at)) {
-    throw new Error("Your verified session has expired. Please sign in again.");
-  }
-
-  const headers = new Headers(options.headers || {});
-  headers.set("Authorization", "Bearer " + session.access_token);
-
-  return window.fetch(url, { ...options, headers });
+  return fetch(url, options);
 }
+
 
 async function downloadAnalysisPdf(id, filename = "analysis-report.pdf") {
   const response = await apiFetch(
@@ -337,16 +318,8 @@ async function downloadAnalysisPdf(id, filename = "analysis-report.pdf") {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function showWorkspace(session) {
-  if (!session || !session.user || (!session.user.is_anonymous && !session.user.email_confirmed_at)) {
-    hideWorkspace();
-    showAuthMessage("Please verify your email before accessing the workspace.");
-    return;
-  }
-
-  document.getElementById("authScreen").style.display = "none";
+function showWorkspace() {
   document.getElementById("mainWorkspace").style.display = "";
-
   loadAIModels();
   loadChatHistory();
   loadAnalysisHistory();
@@ -354,112 +327,9 @@ function showWorkspace(session) {
 
 function hideWorkspace() {
   document.getElementById("mainWorkspace").style.display = "none";
-  document.getElementById("authScreen").style.display = "flex";
 }
 
-function showAuthMessage(message) {
-  authMessage.textContent = message;
-}
 
-authReset.addEventListener("click", async () => {
-  if (!supabaseClient) return showAuthMessage("Authentication is not connected.");
-  const email = authEmail.value.trim();
-  if (!email) return showAuthMessage("Enter your email address first.");
-
-  authReset.disabled = true;
-  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin
-  });
-  authReset.disabled = false;
-  showAuthMessage(error ? error.message : "If the account exists, a password reset email has been sent.");
-});
-
-authForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  if (!supabaseClient) {
-    return showAuthMessage("Supabase is not connected. Refresh and try again.");
-  }
-
-  const email = authEmail.value.trim();
-  const password = authPassword.value;
-  authSubmit.disabled = true;
-  showAuthMessage("Please wait...");
-
-  try {
-      const { error } = await supabaseClient.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (error) throw error;
-
-      showAuthMessage("Sign-in successful. Opening your private workspace...");
-  } catch (error) {
-    showAuthMessage(error.message || "Authentication failed. Please try again.");
-  } finally {
-    authSubmit.disabled = false;
-  }
-});
-
-async function initialiseSupabaseAuth() {
-  try {
-    if (!window.supabase) {
-      throw new Error("Supabase browser library did not load.");
-    }
-
-    const response = await window.fetch("/api/config");
-    if (!response.ok) {
-      throw new Error("Could not load Supabase configuration.");
-    }
-
-    const config = await response.json();
-
-    if (!config.supabaseUrl || !config.supabasePublishableKey) {
-      throw new Error("Supabase configuration is missing.");
-    }
-
-    supabaseClient = window.supabase.createClient(
-      config.supabaseUrl,
-      config.supabasePublishableKey
-    );
-
-    const { data, error } = await supabaseClient.auth.getSession();
-    if (error) throw error;
-
-    let session = data.session;
-
-    if (!session) {
-      const result = await supabaseClient.auth.signInAnonymously();
-      if (result.error) throw result.error;
-      session = result.data.session;
-    }
-
-    if (!session) {
-      throw new Error("Unable to create a private session.");
-    }
-
-    showWorkspace(session);
-
-    supabaseClient.auth.onAuthStateChange((event, newSession) => {
-      if (event === "SIGNED_IN" && newSession) {
-        showWorkspace(newSession);
-      } else if (event === "SIGNED_OUT") {
-        hideWorkspace();
-        showAuthMessage("Session ended. Refresh to create a new session.");
-      }
-    });
-
-  } catch (error) {
-    hideWorkspace();
-    showAuthMessage(
-      error.message || "Unable to start your private workspace."
-    );
-    console.error("Anonymous authentication:", error);
-  }
-}
-
-initialiseSupabaseAuth();
 
 const question=document.getElementById("question");
 const originalSendButton=document.getElementById("send");
@@ -779,10 +649,8 @@ function renderChatHistory(query=""){
 }
 
 document.getElementById("clearHistory").onclick=async()=>{
- if(!confirm("Permanently delete ALL saved conversations?"))return;
- try{
-  const response=await apiFetch("/api/chats",{method:"DELETE"});
-  if(!response.ok)throw new Error("Unable to clear history.");
+  if(!confirm("Permanently delete ALL saved conversations?")) return;
+  dcoWrite(DCO_STORAGE.chats,[]);
   currentChatId=null;
   messages.innerHTML="";
   welcome.style.display="";
@@ -790,104 +658,85 @@ document.getElementById("clearHistory").onclick=async()=>{
   savedChats=[];
   historySearch.value="";
   renderChatHistory();
- }catch(error){
-  alert(error.message);
- }
 };
 
 async function loadChatHistory(){
- try{
-  const response=await apiFetch("/api/chats");
-  if(!response.ok)throw new Error("History unavailable");
-  savedChats=await response.json();
+  savedChats = dcoRead(DCO_STORAGE.chats).sort(
+    (a,b) => (b.updatedAt || 0) - (a.updatedAt || 0)
+  );
   renderChatHistory(historySearch.value);
- }catch(error){
-  chatHistory.textContent="Unable to load chat history.";
- }
 }
 
 async function exportChat(id){
- try{
-  const response=await apiFetch("/api/chats/"+encodeURIComponent(id));
-  const chat=await response.json();
-  if(!response.ok)throw new Error(chat.error||"Export failed.");
+  const chat = dcoRead(DCO_STORAGE.chats).find(x => x.id === id);
+  if(!chat) return alert("Conversation not found.");
 
-  const content=[
-   "DCO CYBER AI - CONVERSATION",
-   "Title: "+chat.title,
-   "Date: "+new Date(chat.createdAt).toLocaleString(),
-   "",
-   ...chat.messages.map(m=>
-    (m.role==="assistant"?"DCO CYBER AI":"USER")+":\n"+m.content+"\n"
-   )
+  const content = [
+    "DCO CYBER AI - CONVERSATION",
+    "Title: " + chat.title,
+    "Date: " + new Date(chat.createdAt).toLocaleString(),
+    "",
+    ...(chat.messages || []).map(m =>
+      (m.role === "assistant" ? "DCO CYBER AI" : "USER") +
+      ":\n" + m.content + "\n"
+    )
   ].join("\n");
 
-  const blob=new Blob([content],{type:"text/plain;charset=utf-8"});
-  const url=URL.createObjectURL(blob);
-  const link=document.createElement("a");
-  link.href=url;
-  link.download=(chat.title||"DCO-chat")
-   .replace(/[^a-z0-9-_]/gi,"_")+".txt";
-  document.body.appendChild(link);
+  const url = URL.createObjectURL(
+    new Blob([content], {type:"text/plain;charset=utf-8"})
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = (chat.title || "DCO-chat").replace(/[^a-z0-9-_]/gi,"_") + ".txt";
   link.click();
-  link.remove();
   URL.revokeObjectURL(url);
- }catch(error){
-  alert(error.message);
- }
 }
 
 async function renameChat(id,currentTitle){
- const title=prompt("Enter a new conversation title:",currentTitle);
- if(title===null)return;
- if(!title.trim()){
-  alert("Title cannot be empty.");
-  return;
- }
- try{
-  const response=await apiFetch("/api/chats/"+encodeURIComponent(id),{
-   method:"PATCH",
-   headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({title:title.trim()})
-  });
-  const data=await response.json();
-  if(!response.ok)throw new Error(data.error||"Rename failed.");
+  const title = prompt("Enter a new conversation title:",currentTitle);
+  if(title === null) return;
+  if(!title.trim() || title.trim().length > 60)
+    return alert("Title must contain 1 to 60 characters.");
+
+  const chats = dcoRead(DCO_STORAGE.chats);
+  const chat = chats.find(x => x.id === id);
+  if(!chat) return alert("Conversation not found.");
+
+  chat.title = title.trim();
+  chat.updatedAt = Date.now();
+  dcoWrite(DCO_STORAGE.chats,chats);
   await loadChatHistory();
- }catch(error){
-  alert(error.message);
- }
 }
 
 async function openChat(id){
- try{
-  const response=await apiFetch("/api/chats/"+encodeURIComponent(id));
-  const chat=await response.json();
-  if(!response.ok)throw new Error(chat.error||"Unable to open chat.");
-  currentChatId=chat.id;
-  messages.innerHTML="";
-  welcome.style.display="none";
-  suggestions.style.display="none";
-  chat.messages.forEach(m=>addMessage(m.content,m.role==="assistant"?"assistant":"user"));
-  loadChatHistory();
-  if(window.innerWidth<=700){
-   document.getElementById("sidebar").classList.remove("open");
-   document.getElementById("backdrop").classList.remove("show");
+  const chat = dcoRead(DCO_STORAGE.chats).find(x => x.id === id);
+  if(!chat) return alert("Conversation not found.");
+
+  currentChatId = chat.id;
+  messages.innerHTML = "";
+  welcome.style.display = "none";
+  suggestions.style.display = "none";
+
+  (chat.messages || []).forEach(m =>
+    addMessage(m.content,m.role === "assistant" ? "assistant" : "user")
+  );
+
+  await loadChatHistory();
+
+  if(window.innerWidth <= 700){
+    document.getElementById("sidebar").classList.remove("open");
+    document.getElementById("backdrop").classList.remove("show");
   }
- }catch(error){
-  alert(error.message);
- }
 }
 
 async function deleteChat(id){
- if(!confirm("Delete this conversation permanently?"))return;
- try{
-  const response=await apiFetch("/api/chats/"+encodeURIComponent(id),{method:"DELETE"});
-  if(!response.ok)throw new Error("Could not delete conversation.");
-  if(currentChatId===id)newChat();
-  else loadChatHistory();
- }catch(error){
-  alert(error.message);
- }
+  if(!confirm("Delete this conversation permanently?")) return;
+
+  const chats = dcoRead(DCO_STORAGE.chats).filter(x => x.id !== id);
+  dcoWrite(DCO_STORAGE.chats,chats);
+
+  if(currentChatId === id) newChat();
+  else await loadChatHistory();
 }
 
 function useSuggestion(text){
@@ -901,14 +750,10 @@ const analysisHistory=document.getElementById("analysisHistory");
 const analysisHistorySearch=document.getElementById("analysisHistorySearch");
 
 async function loadAnalysisHistory(){
- try{
-  const response=await apiFetch("/api/analyses");
-  if(!response.ok)throw new Error("Unable to load analysis history.");
-  const items=await response.json();
+  const items = dcoRead(DCO_STORAGE.analyses).sort(
+    (a,b) => (b.createdAt || 0) - (a.createdAt || 0)
+  );
   renderAnalysisHistory(items);
- }catch(error){
-  analysisHistory.textContent=error.message;
- }
 }
 
 function renderAnalysisHistory(items){
@@ -954,62 +799,54 @@ function renderAnalysisHistory(items){
 }
 
 async function openSavedAnalysis(id){
- try{
-  const response=await apiFetch("/api/analyses/"+encodeURIComponent(id));
-  const item=await response.json();
-  if(!response.ok)throw new Error(item.error||"Unable to open analysis.");
+  const item = dcoRead(DCO_STORAGE.analyses).find(x => x.id === id);
+  if(!item) return alert("Saved analysis not found.");
 
-  welcome.style.display="none";
-  suggestions.style.display="none";
-  messages.innerHTML="";
+  welcome.style.display = "none";
+  suggestions.style.display = "none";
+  messages.innerHTML = "";
 
-  addMessage("Saved analysis: "+item.title,"user");
-  addMessage(item.analysis,"assistant");
+  addMessage("Saved analysis: " + item.title,"user");
+  addMessage(item.analysis || "No analysis recorded.","assistant");
 
-  (Array.isArray(item.qaHistory) ? item.qaHistory : []).forEach(entry=>{
-   if(entry && typeof entry.content==="string"){
-    addMessage(entry.content,entry.role==="assistant"?"assistant":"user");
-   }
+  (Array.isArray(item.qaHistory) ? item.qaHistory : []).forEach(entry => {
+    if(entry && typeof entry.content === "string")
+      addMessage(entry.content,entry.role === "assistant" ? "assistant" : "user");
   });
 
   if(item.documentText){
-   const panel=document.createElement("div");
-   panel.style.cssText="padding:14px;margin:12px 0;background:#252525;border:1px solid #555;border-radius:12px;";
+    const panel = document.createElement("div");
+    panel.style.cssText = "padding:14px;margin:12px 0;background:#252525;border:1px solid #555;border-radius:12px;";
+    const heading = document.createElement("strong");
+    heading.textContent = "Ask questions about these documents";
+    heading.style.display = "block";
+    heading.style.marginBottom = "10px";
 
-   const heading=document.createElement("strong");
-   heading.textContent="Ask questions about these documents";
-   heading.style.display="block";
-   heading.style.marginBottom="10px";
+    const input = document.createElement("textarea");
+    input.placeholder = "Ask a follow-up question...";
+    input.maxLength = 2000;
+    input.rows = 3;
+    input.style.cssText = "width:100%;box-sizing:border-box;padding:10px;border-radius:8px;background:#171717;color:white;border:1px solid #555;";
 
-   const input=document.createElement("textarea");
-   input.placeholder="Ask a follow-up question...";
-   input.maxLength=2000;
-   input.rows=3;
-   input.style.cssText="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;background:#171717;color:white;border:1px solid #555;";
+    const send = document.createElement("button");
+    send.type = "button";
+    send.textContent = "Ask question";
+    send.style.cssText = "margin-top:8px;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;";
 
-   const send=document.createElement("button");
-   send.type="button";
-   send.textContent="Ask question";
-   send.style.cssText="margin-top:8px;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;";
+    const status = document.createElement("div");
+    status.style.cssText = "margin-top:10px;white-space:pre-wrap;";
 
-   const status=document.createElement("div");
-   status.style.cssText="margin-top:10px;white-space:pre-wrap;";
+    send.onclick = () => sendSavedAnalysisQuestion(id,input,send,status);
+    input.addEventListener("keydown",event => {
+      if(event.key === "Enter" && !event.shiftKey){
+        event.preventDefault();
+        sendSavedAnalysisQuestion(id,input,send,status);
+      }
+    });
 
-   send.onclick=()=>sendSavedAnalysisQuestion(id,input,send,status);
-   input.addEventListener("keydown",event=>{
-    if(event.key==="Enter" && !event.shiftKey){
-     event.preventDefault();
-     sendSavedAnalysisQuestion(id,input,send,status);
-    }
-   });
-
-   panel.append(heading,input,send,status);
-   messages.appendChild(panel);
-   panel.scrollIntoView({behavior:"smooth",block:"nearest"});
+    panel.append(heading,input,send,status);
+    messages.appendChild(panel);
   }
- }catch(error){
-  alert(error.message);
- }
 }
 
 async function sendSavedAnalysisQuestion(id,input,send,status){
@@ -1041,14 +878,12 @@ async function sendSavedAnalysisQuestion(id,input,send,status){
 }
 
 async function deleteSavedAnalysis(id){
- if(!confirm("Delete this saved analysis?"))return;
- try{
-  const response=await apiFetch("/api/analyses/"+encodeURIComponent(id),{method:"DELETE"});
-  if(!response.ok)throw new Error("Unable to delete analysis.");
+  if(!confirm("Delete this saved analysis?")) return;
+  dcoWrite(
+    DCO_STORAGE.analyses,
+    dcoRead(DCO_STORAGE.analyses).filter(x => x.id !== id)
+  );
   await loadAnalysisHistory();
- }catch(error){
-  alert(error.message);
- }
 }
 
 analysisHistorySearch.addEventListener("input",loadAnalysisHistory);
@@ -1099,31 +934,34 @@ let activeChatController = null;
 
 async function sendMessage(){
  const text=question.value.trim();
-
  if(!text || activeChatController)return;
 
- if(!currentChatId){
-  try{
-   const created=await apiFetch("/api/chats",{method:"POST"});
-   const chat=await created.json();
+ let chats=dcoRead(DCO_STORAGE.chats);
+ let chat=chats.find(item=>item.id===currentChatId);
 
-   if(!created.ok)throw new Error(chat.error||"Could not create chat.");
-
-   currentChatId=chat.id;
-  }catch(error){
-   alert("Unable to start chat: "+error.message);
-   return;
-  }
+ if(!chat){
+  chat={
+   id:crypto.randomUUID(),
+   title:text.slice(0,60),
+   messages:[],
+   createdAt:Date.now(),
+   updatedAt:Date.now()
+  };
+  currentChatId=chat.id;
+  chats.unshift(chat);
  }
+
+ chat.messages=chat.messages||[];
+ chat.messages.push({role:"user",content:text});
+ chat.updatedAt=Date.now();
+ dcoWrite(DCO_STORAGE.chats,chats);
 
  welcome.style.display="none";
  suggestions.style.display="none";
-
  addMessage(text,"user");
  question.value="";
 
  activeChatController=new AbortController();
-
  send.disabled=false;
  send.textContent="Stop ■";
  send.classList.add("stop");
@@ -1133,6 +971,11 @@ async function sendMessage(){
  let completed=false;
 
  try{
+  const conversationHistory=chat.messages.map(item=>({
+   role:item.role,
+   content:item.content
+  }));
+
   const response=await apiFetch("/api/chat",{
    method:"POST",
    signal:activeChatController.signal,
@@ -1141,7 +984,8 @@ async function sendMessage(){
     message:text,
     chatId:currentChatId,
     mode:aiMode.value,
-    model:aiModel.value
+    model:aiModel.value,
+    messages:conversationHistory
    })
   });
 
@@ -1152,7 +996,6 @@ async function sendMessage(){
 
   const reader=response.body.getReader();
   const decoder=new TextDecoder();
-
   let buffer="";
   let eventName="";
 
@@ -1175,9 +1018,7 @@ async function sendMessage(){
      loading.scrollIntoView({behavior:"smooth",block:"nearest"});
     }
 
-    if(eventName==="done"){
-     completed=true;
-    }
+    if(eventName==="done")completed=true;
 
     if(eventName==="error"){
      throw new Error(data.error||"Streaming failed.");
@@ -1189,58 +1030,66 @@ async function sendMessage(){
 
   while(true){
    const {done,value}=await reader.read();
-
    if(done)break;
 
    buffer+=decoder.decode(value,{stream:true});
-
    const lines=buffer.split("\n");
    buffer=lines.pop()||"";
 
    for(const line of lines){
-    if(line.trim()===""){
-     eventName="";
-    }else{
-     processStreamLine(line.trimEnd());
-    }
+    if(line.trim()==="")eventName="";
+    else processStreamLine(line.trimEnd());
    }
   }
 
   buffer+=decoder.decode();
-
-  if(buffer.trim()){
-   processStreamLine(buffer.trimEnd());
-  }
+  if(buffer.trim())processStreamLine(buffer.trimEnd());
 
   if(!answer){
    loading.firstChild.textContent="No response received.";
   }
 
-  if(completed && voiceEnabled && answer){
-   speak(answer);
+  if(answer){
+   const latest=dcoRead(DCO_STORAGE.chats);
+   const saved=latest.find(item=>item.id===currentChatId);
+   if(saved){
+    saved.messages=saved.messages||[];
+    saved.messages.push({role:"assistant",content:answer});
+    saved.updatedAt=Date.now();
+    dcoWrite(DCO_STORAGE.chats,latest);
+   }
   }
+
+  if(completed && voiceEnabled && answer)speak(answer);
 
  }catch(error){
   if(error.name==="AbortError"){
-   if(!answer){
-    loading.firstChild.textContent="Generation stopped.";
-   }
+   if(!answer)loading.firstChild.textContent="Generation stopped.";
   }else if(answer){
    loading.firstChild.textContent=answer+"\n\nResponse interrupted: "+error.message;
   }else{
    loading.firstChild.textContent="Unable to connect: "+error.message;
+  }
+
+  if(answer){
+   const latest=dcoRead(DCO_STORAGE.chats);
+   const saved=latest.find(item=>item.id===currentChatId);
+   if(saved){
+    saved.messages=saved.messages||[];
+    saved.messages.push({role:"assistant",content:answer});
+    saved.updatedAt=Date.now();
+    dcoWrite(DCO_STORAGE.chats,latest);
+   }
   }
  }finally{
   activeChatController=null;
   send.disabled=false;
   send.textContent="Send ↑";
   send.classList.remove("stop");
-
   loadChatHistory();
   question.focus();
  }
 }
-
 send.onclick=()=>{
  if(activeChatController){
   activeChatController.abort();
@@ -1272,6 +1121,8 @@ if(SpeechRecognition){
  mic.onclick=()=>alert("Voice input is not supported in this browser. Try an updated Chrome browser.");
 }
 
+
+showWorkspace();
 </script>
 </body>
 </html>
